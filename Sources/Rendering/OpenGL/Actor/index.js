@@ -19,9 +19,8 @@ function vtkOpenGLActor(publicAPI, model) {
       model.openGLRenderWindow = publicAPI.getFirstAncestorOfType(
         'vtkOpenGLRenderWindow'
       );
-      model.openGLRenderer = publicAPI.getFirstAncestorOfType(
-        'vtkOpenGLRenderer'
-      );
+      model.openGLRenderer =
+        publicAPI.getFirstAncestorOfType('vtkOpenGLRenderer');
       model.context = model.openGLRenderWindow.getContext();
       publicAPI.prepareNodes();
       publicAPI.addMissingNodes(model.renderable.getTextures());
@@ -46,7 +45,19 @@ function vtkOpenGLActor(publicAPI, model) {
   };
 
   publicAPI.traverseOpaqueZBufferPass = (renderPass) => {
-    publicAPI.traverseOpaquePass(renderPass);
+    if (
+      !model.renderable ||
+      !model.renderable.getNestedVisibility() ||
+      (model.openGLRenderer.getSelector() &&
+        !model.renderable.getNestedPickable())
+    ) {
+      return;
+    }
+
+    publicAPI.apply(renderPass, true);
+    model.oglmapper.traverse(renderPass);
+
+    publicAPI.apply(renderPass, false);
   };
 
   // we draw textures, then mapper, then post pass textures
@@ -121,7 +132,7 @@ function vtkOpenGLActor(publicAPI, model) {
 
   publicAPI.opaquePass = (prepass, renderPass) => {
     if (prepass) {
-      model.openGLRenderWindow.enableDepthMask();
+      model.context.depthMask(true);
       publicAPI.activateTextures();
     } else if (model.activeTextures) {
       for (let index = 0; index < model.activeTextures.length; index++) {
@@ -133,7 +144,7 @@ function vtkOpenGLActor(publicAPI, model) {
   // Renders myself
   publicAPI.translucentPass = (prepass, renderPass) => {
     if (prepass) {
-      model.openGLRenderWindow.disableDepthMask();
+      model.context.depthMask(false);
       publicAPI.activateTextures();
     } else if (model.activeTextures) {
       for (let index = 0; index < model.activeTextures.length; index++) {

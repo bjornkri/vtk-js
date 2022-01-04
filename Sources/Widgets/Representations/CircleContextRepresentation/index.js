@@ -1,9 +1,9 @@
 import macro from 'vtk.js/Sources/macros';
 import vtkActor from 'vtk.js/Sources/Rendering/Core/Actor';
 import vtkCircleSource from 'vtk.js/Sources/Filters/Sources/CircleSource';
+import vtkContextRepresentation from 'vtk.js/Sources/Widgets/Representations/ContextRepresentation';
 import vtkDataArray from 'vtk.js/Sources/Common/Core/DataArray';
 import vtkGlyph3DMapper from 'vtk.js/Sources/Rendering/Core/Glyph3DMapper';
-import vtkHandleRepresentation from 'vtk.js/Sources/Widgets/Representations/HandleRepresentation';
 import vtkMatrixBuilder from 'vtk.js/Sources/Common/Core/MatrixBuilder';
 import vtkPolyData from 'vtk.js/Sources/Common/DataModel/PolyData';
 import vtkWidgetRepresentation from 'vtk.js/Sources/Widgets/Representations/WidgetRepresentation';
@@ -90,7 +90,7 @@ function vtkCircleContextRepresentation(publicAPI, model) {
 
   publicAPI.setGlyphResolution = macro.chain(
     publicAPI.setGlyphResolution,
-    (r) => model.glyph.setResolution(r)
+    (r) => model.pipelines.circle.glyph.setResolution(r)
   );
 
   // --------------------------------------------------------------------------
@@ -115,7 +115,15 @@ function vtkCircleContextRepresentation(publicAPI, model) {
 
   publicAPI.requestData = (inData, outData) => {
     const { points, scale, color, direction } = model.internalArrays;
-    const list = publicAPI.getRepresentationStates(inData[0]);
+    const list = publicAPI
+      .getRepresentationStates(inData[0])
+      .filter(
+        (state) =>
+          state.getOrigin &&
+          state.getOrigin() &&
+          state.isVisible &&
+          state.isVisible()
+      );
     const totalCount = list.length;
 
     if (color.getNumberOfValues() !== totalCount) {
@@ -132,7 +140,7 @@ function vtkCircleContextRepresentation(publicAPI, model) {
       direction: direction.getData(),
     };
 
-    for (let i = 0; i < list.length; i++) {
+    for (let i = 0; i < totalCount; i++) {
       const state = list[i];
       const isActive = state.getActive();
       const scaleFactor = isActive ? model.activeScaleFactor : 1;
@@ -167,14 +175,9 @@ function vtkCircleContextRepresentation(publicAPI, model) {
       const scale1 =
         (state.getScale1 ? state.getScale1() : model.defaultScale) / 2;
 
-      let sFactor = scaleFactor;
-      if (state.getVisible && !state.getVisible()) {
-        sFactor = 0;
-      }
-
-      typedArray.scale[i * 3 + 0] = scale1 * sFactor * scale3[0];
-      typedArray.scale[i * 3 + 1] = scale1 * sFactor * scale3[1];
-      typedArray.scale[i * 3 + 2] = scale1 * sFactor * scale3[2];
+      typedArray.scale[i * 3 + 0] = scale1 * scaleFactor * scale3[0];
+      typedArray.scale[i * 3 + 1] = scale1 * scaleFactor * scale3[1];
+      typedArray.scale[i * 3 + 2] = scale1 * scaleFactor * scale3[2];
 
       typedArray.color[i] =
         model.useActiveColor && isActive ? model.activeColor : state.getColor();
@@ -187,8 +190,6 @@ function vtkCircleContextRepresentation(publicAPI, model) {
   // --------------------------------------------------------------------------
   // Initialization
   // --------------------------------------------------------------------------
-
-  publicAPI.setActiveScaleFactor(1);
 }
 
 // ----------------------------------------------------------------------------
@@ -207,7 +208,7 @@ const DEFAULT_VALUES = {
 export function extend(publicAPI, model, initialValues = {}) {
   Object.assign(model, DEFAULT_VALUES, initialValues);
 
-  vtkHandleRepresentation.extend(publicAPI, model, initialValues);
+  vtkContextRepresentation.extend(publicAPI, model, initialValues);
   macro.setGet(publicAPI, model, ['glyphResolution', 'defaultScale']);
   macro.get(publicAPI, model, ['glyph', 'mapper', 'actor']);
 

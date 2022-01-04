@@ -17,7 +17,7 @@ import { registerOverride } from 'vtk.js/Sources/Rendering/OpenGL/ViewNodeFactor
 
 /* eslint-disable no-lonely-if */
 
-const primTypes = {
+export const primTypes = {
   Start: 0,
   Points: 0,
   Lines: 1,
@@ -46,9 +46,8 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
   publicAPI.buildPass = (prepass) => {
     if (prepass) {
       model.openGLActor = publicAPI.getFirstAncestorOfType('vtkOpenGLActor');
-      model.openGLRenderer = model.openGLActor.getFirstAncestorOfType(
-        'vtkOpenGLRenderer'
-      );
+      model.openGLRenderer =
+        model.openGLActor.getFirstAncestorOfType('vtkOpenGLRenderer');
       model.openGLRenderWindow = model.openGLRenderer.getParent();
       model.openGLCamera = model.openGLRenderer.getViewNodeFor(
         model.openGLRenderer.getRenderable().getActiveCamera()
@@ -341,9 +340,8 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
       'lastLightComplexity'
     );
 
-    const lastLightCount = model.lastBoundBO.getReferenceByName(
-      'lastLightCount'
-    );
+    const lastLightCount =
+      model.lastBoundBO.getReferenceByName('lastLightCount');
 
     let sstring = [];
 
@@ -784,9 +782,9 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
                 FSSource,
                 '//VTK::TCoord::Impl',
                 [
-                  'vec4 tcolor = texture2D(texture1, tcoordVCVSOutput);',
-                  'gl_FragData[0] = clamp(gl_FragData[0],0.0,1.0)*',
-                  '  vec4(tcolor.r,tcolor.r,tcolor.r,1.0);',
+                  '  vec4 tcolor = texture2D(texture1, tcoordVCVSOutput);',
+                  '  ambientColor = ambientColor*tcolor.r;',
+                  '  diffuseColor = diffuseColor*tcolor.r;',
                 ]
               ).result;
               break;
@@ -795,9 +793,10 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
                 FSSource,
                 '//VTK::TCoord::Impl',
                 [
-                  'vec4 tcolor = texture2D(texture1, tcoordVCVSOutput);',
-                  'gl_FragData[0] = clamp(gl_FragData[0],0.0,1.0)*',
-                  '  vec4(tcolor.r,tcolor.r,tcolor.r,tcolor.g);',
+                  '  vec4 tcolor = texture2D(texture1, tcoordVCVSOutput);',
+                  '  ambientColor = ambientColor*tcolor.r;',
+                  '  diffuseColor = diffuseColor*tcolor.r;',
+                  '  opacity = opacity * tcolor.g;',
                 ]
               ).result;
               break;
@@ -805,7 +804,12 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
               FSSource = vtkShaderProgram.substitute(
                 FSSource,
                 '//VTK::TCoord::Impl',
-                'gl_FragData[0] = clamp(gl_FragData[0],0.0,1.0)*texture2D(texture1, tcoordVCVSOutput.st);'
+                [
+                  '  vec4 tcolor = texture2D(texture1, tcoordVCVSOutput);',
+                  '  ambientColor = ambientColor*tcolor.rgb;',
+                  '  diffuseColor = diffuseColor*tcolor.rgb;',
+                  '  opacity = opacity * tcolor.a;',
+                ]
               ).result;
           }
         }
@@ -834,9 +838,9 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
               FSSource,
               '//VTK::TCoord::Impl',
               [
-                'vec4 tcolor = textureCube(texture1, tcoordVCVSOutput);',
-                'gl_FragData[0] = clamp(gl_FragData[0],0.0,1.0)*',
-                '  vec4(tcolor.r,tcolor.r,tcolor.r,1.0);',
+                '  vec4 tcolor = textureCube(texture1, tcoordVCVSOutput);',
+                '  ambientColor = ambientColor*tcolor.r;',
+                '  diffuseColor = diffuseColor*tcolor.r;',
               ]
             ).result;
             break;
@@ -845,9 +849,10 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
               FSSource,
               '//VTK::TCoord::Impl',
               [
-                'vec4 tcolor = textureCube(texture1, tcoordVCVSOutput);',
-                'gl_FragData[0] = clamp(gl_FragData[0],0.0,1.0)*',
-                '  vec4(tcolor.r,tcolor.r,tcolor.r,tcolor.g);',
+                '  vec4 tcolor = textureCube(texture1, tcoordVCVSOutput);',
+                '  ambientColor = ambientColor*tcolor.r;',
+                '  diffuseColor = diffuseColor*tcolor.r;',
+                '  opacity = opacity * tcolor.g;',
               ]
             ).result;
             break;
@@ -855,7 +860,12 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
             FSSource = vtkShaderProgram.substitute(
               FSSource,
               '//VTK::TCoord::Impl',
-              'gl_FragData[0] = clamp(gl_FragData[0],0.0,1.0)*textureCube(texture1, tcoordVCVSOutput);'
+              [
+                '  vec4 tcolor = textureCube(texture1, tcoordVCVSOutput);',
+                '  ambientColor = ambientColor*tcolor.rgb;',
+                '  diffuseColor = diffuseColor*tcolor.rgb;',
+                '  opacity = opacity * tcolor.a;',
+              ]
             ).result;
         }
       }
@@ -870,19 +880,15 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
     let FSSource = shaders.Fragment;
 
     if (model.renderable.getNumberOfClippingPlanes()) {
-      let numClipPlanes = model.renderable.getNumberOfClippingPlanes();
-      if (numClipPlanes > 6) {
-        macro.vtkErrorMacro('OpenGL has a limit of 6 clipping planes');
-        numClipPlanes = 6;
-      }
+      const numClipPlanes = model.renderable.getNumberOfClippingPlanes();
       VSSource = vtkShaderProgram.substitute(VSSource, '//VTK::Clip::Dec', [
         'uniform int numClipPlanes;',
-        'uniform vec4 clipPlanes[6];',
-        'varying float clipDistancesVSOutput[6];',
+        `uniform vec4 clipPlanes[${numClipPlanes}];`,
+        `varying float clipDistancesVSOutput[${numClipPlanes}];`,
       ]).result;
 
       VSSource = vtkShaderProgram.substitute(VSSource, '//VTK::Clip::Impl', [
-        'for (int planeNum = 0; planeNum < 6; planeNum++)',
+        `for (int planeNum = 0; planeNum < ${numClipPlanes}; planeNum++)`,
         '    {',
         '    if (planeNum >= numClipPlanes)',
         '        {',
@@ -893,11 +899,11 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
       ]).result;
       FSSource = vtkShaderProgram.substitute(FSSource, '//VTK::Clip::Dec', [
         'uniform int numClipPlanes;',
-        'varying float clipDistancesVSOutput[6];',
+        `varying float clipDistancesVSOutput[${numClipPlanes}];`,
       ]).result;
 
       FSSource = vtkShaderProgram.substitute(FSSource, '//VTK::Clip::Impl', [
-        'for (int planeNum = 0; planeNum < 6; planeNum++)',
+        `for (int planeNum = 0; planeNum < ${numClipPlanes}; planeNum++)`,
         '    {',
         '    if (planeNum >= numClipPlanes)',
         '        {',
@@ -1065,9 +1071,8 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
     const lastLightComplexity = model.lastBoundBO.getReferenceByName(
       'lastLightComplexity'
     );
-    const lastLightCount = model.lastBoundBO.getReferenceByName(
-      'lastLightCount'
-    );
+    const lastLightCount =
+      model.lastBoundBO.getReferenceByName('lastLightCount');
     if (
       lastLightComplexity !== lightComplexity ||
       lastLightCount !== numberOfLights
@@ -1136,8 +1141,8 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
     publicAPI.setCameraShaderParameters(cellBO, ren, actor);
     publicAPI.setLightingShaderParameters(cellBO, ren, actor);
 
-    const listCallbacks = model.renderable.getViewSpecificProperties()
-      .ShadersCallbacks;
+    const listCallbacks =
+      model.renderable.getViewSpecificProperties().ShadersCallbacks;
     if (listCallbacks) {
       listCallbacks.forEach((object) => {
         object.callback(object.userData, cellBO, ren, actor);
@@ -1280,11 +1285,7 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
 
     if (model.renderable.getNumberOfClippingPlanes()) {
       // add all the clipping planes
-      let numClipPlanes = model.renderable.getNumberOfClippingPlanes();
-      if (numClipPlanes > 6) {
-        macro.vtkErrorMacro('OpenGL has a limit of 6 clipping planes');
-        numClipPlanes = 6;
-      }
+      const numClipPlanes = model.renderable.getNumberOfClippingPlanes();
       const planeEquations = [];
       for (let i = 0; i < numClipPlanes; i++) {
         const planeEquation = [];
@@ -1299,7 +1300,7 @@ function vtkOpenGLPolyDataMapper(publicAPI, model) {
         }
       }
       cellBO.getProgram().setUniformi('numClipPlanes', numClipPlanes);
-      cellBO.getProgram().setUniform4fv('clipPlanes', 6, planeEquations);
+      cellBO.getProgram().setUniform4fv('clipPlanes', planeEquations);
     }
 
     if (
@@ -1982,7 +1983,7 @@ export const newInstance = macro.newInstance(extend, 'vtkOpenGLPolyDataMapper');
 
 // ----------------------------------------------------------------------------
 
-export default { newInstance, extend };
+export default { newInstance, extend, primTypes };
 
 // Register ourself to OpenGL backend if imported
 registerOverride('vtkMapper', newInstance);

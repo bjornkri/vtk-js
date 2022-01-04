@@ -5,7 +5,7 @@ import vtkTexture from "../Texture";
 import vtkVolume from "../Volume";
 
 
-interface IPropInitialValues {
+export interface IPropInitialValues {
     visibility?: boolean;
     pickable?: boolean;
     dragable?: boolean;
@@ -110,7 +110,7 @@ export interface vtkProp extends vtkObject {
     /**
      * 
      */
-    getNestedProps(): null;
+    getNestedProps(): any;
 
     /**
      * Return parent prop set by setParentProp

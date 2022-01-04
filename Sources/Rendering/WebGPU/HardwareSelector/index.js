@@ -72,6 +72,7 @@ function getPixelInformationWithData(
           buffdata.zbufferBufferWidth +
         inDisplayPosition[0];
       info.zValue = buffdata.depthValues[offset];
+      info.zValue = buffdata.webGPURenderer.convertToOpenGLDepth(info.zValue);
       info.displayPosition = inDisplayPosition;
     }
     return info;
@@ -188,12 +189,13 @@ function convertSelection(fieldassociation, dataMap, buffdata) {
         value.info.displayPosition[1],
         value.info.zValue,
       ];
-      child.getProperties().worldPosition = buffdata.webGPURenderWindow.displayToWorld(
-        value.info.displayPosition[0],
-        value.info.displayPosition[1],
-        value.info.zValue,
-        buffdata.renderer
-      );
+      child.getProperties().worldPosition =
+        buffdata.webGPURenderWindow.displayToWorld(
+          value.info.displayPosition[0],
+          value.info.displayPosition[1],
+          value.info.zValue,
+          buffdata.renderer
+        );
     }
 
     child.setSelectionList(value.attributeIDs);
@@ -273,6 +275,10 @@ function vtkWebGPUHardwareSelector(publicAPI, model) {
       vtkErrorMacro('Renderer and view must be set before calling Select.');
       return false;
     }
+
+    // todo revisit making selection part of core
+    // then we can do this in core
+    model.WebGPURenderWindow.getRenderable().preRender();
 
     if (!model.WebGPURenderWindow.getInitialized()) {
       model.WebGPURenderWindow.initialize();

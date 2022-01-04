@@ -156,6 +156,9 @@ function vtkImplicitPlaneRepresentation(publicAPI, model) {
   publicAPI.requestData = (inData, outData) => {
     const state = inData[0];
     const origin = state.getOrigin();
+    if (!origin) {
+      return;
+    }
     const normal = state.getNormal();
     const bounds = state.getBounds();
     model.plane.setOrigin(origin);
@@ -265,12 +268,8 @@ function vtkImplicitPlaneRepresentation(publicAPI, model) {
   // --------------------------------------------------------------------------
 
   publicAPI.updateActorVisibility = (renderingType, ctxVisible, hVisible) => {
-    const {
-      planeVisible,
-      originVisible,
-      normalVisible,
-      outlineVisible,
-    } = model;
+    const { planeVisible, originVisible, normalVisible, outlineVisible } =
+      model;
     if (renderingType === RenderingTypes.PICKING_BUFFER) {
       model.pipelines.plane.actor.setVisibility(planeVisible);
       model.pipelines.origin.actor.setVisibility(originVisible);

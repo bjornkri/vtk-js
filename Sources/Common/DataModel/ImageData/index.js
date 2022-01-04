@@ -322,9 +322,7 @@ function vtkImageData(publicAPI, model) {
     vec3.transformMat4(out1, in1, model.indexToWorld);
     vec3.transformMat4(out2, in2, model.indexToWorld);
 
-    vtkMath.computeBoundsFromPoints(out1, out2, bout);
-
-    return bout;
+    return vtkMath.computeBoundsFromPoints(out1, out2, bout);
   };
 
   publicAPI.worldToIndexBounds = (bin, bout = []) => {
@@ -337,9 +335,7 @@ function vtkImageData(publicAPI, model) {
     vec3.transformMat4(out1, in1, model.worldToIndex);
     vec3.transformMat4(out2, in2, model.worldToIndex);
 
-    vtkMath.computeBoundsFromPoints(out1, out2, bout);
-
-    return bout;
+    return vtkMath.computeBoundsFromPoints(out1, out2, bout);
   };
 
   // Make sure the transform is correct
@@ -414,7 +410,9 @@ function vtkImageData(publicAPI, model) {
     }
 
     const average = inum > 0 ? isum / inum : 0;
-    const variance = sumOfSquares - average * average;
+    const variance = inum
+      ? Math.abs(sumOfSquares / inum - average * average)
+      : 0;
     const sigma = Math.sqrt(variance);
 
     return {
@@ -423,6 +421,7 @@ function vtkImageData(publicAPI, model) {
       average,
       variance,
       sigma,
+      count: inum,
     };
   };
 

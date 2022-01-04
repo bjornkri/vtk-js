@@ -1,3 +1,17 @@
+## From 19.x to 20
+
+In ShapeWidget: 
+- `setLabelTextCallback` is replaced by `text` substate.  
+- `setPixelScale` has been removed. It should be replaced by point handle `scale1` mixin and `scaleInPixels`.  
+- `useHandles` has been removed. It should be replaced by `setHandleVisibility`.
+- `resetAfterPointPlacement` is now false by default.
+
+RectangleWidget and EllipseWidget handles now scale up automatically.
+
+## From 19.2 to 19.3
+
+Node >=12 is required
+
 ## From 18.x to 19
 
 vtkWidgetRepresentation.updateActorVisibility(...) lost the widgetVisibility parameter.

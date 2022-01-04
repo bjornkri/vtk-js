@@ -1,16 +1,16 @@
 import { vtkObject, vtkSubscription } from "../../../interfaces";
+import { RGBColor } from "../../../types";
 import vtkRenderer from "../../Core/Renderer";
 import vtkRenderWindow from "../../Core/RenderWindow";
 import vtkRenderWindowInteractor from "../../Core/RenderWindowInteractor";
-
-// import vtkOpenGLRenderWindow from "../../../OpenGL/RenderWindow";
+import vtkOpenGLRenderWindow from "../../OpenGL/RenderWindow";
 
 
 /**
  *
  */
-interface IGenericRenderWindowInitialValues {
-	background?: number[];	
+export interface IGenericRenderWindowInitialValues {
+	background?: RGBColor;
 	listenWindowResize?: boolean;
 	container?: HTMLElement,
 }
@@ -35,7 +35,7 @@ export interface vtkGenericRenderWindow extends vtkObject {
 	/**
 	 * 
 	 */
-	getOpenGLRenderWindow(): any; // vtkOpenGLRenderWindow
+	getOpenGLRenderWindow(): vtkOpenGLRenderWindow;
 
 	/**
 	 * 
@@ -62,13 +62,13 @@ export interface vtkGenericRenderWindow extends vtkObject {
 
 	/**
 	 * Set background color
-	 * @param {Number[]} background The background color.
+	 * @param {RGBColor} background The background color.
 	 */
-	setBackground(background: number[]): boolean;
+	setBackground(background: RGBColor): boolean;
 
 	/**
-	 * Set container element
-	 * @param {HTMLElement} el 
+	 * Set thecontainer element
+	 * @param {HTMLElement} el The container element.
 	 */
 	setContainer(el: HTMLElement): void;
 }

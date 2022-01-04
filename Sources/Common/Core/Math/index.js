@@ -730,7 +730,7 @@ export function roundNumber(num, digits = 0) {
   return +`${Math.round(`${+arr[0]}e${sig}${+arr[1] + digits}`)}e-${digits}`;
 }
 
-export function roundVector(vector, out = [], digits = 0) {
+export function roundVector(vector, out = [0, 0, 0], digits = 0) {
   out[0] = roundNumber(vector[0], digits);
   out[1] = roundNumber(vector[1], digits);
   out[2] = roundNumber(vector[2], digits);
@@ -1949,6 +1949,7 @@ export function uninitializeBounds(bounds) {
   bounds[3] = -1.0;
   bounds[4] = 1.0;
   bounds[5] = -1.0;
+  return bounds;
 }
 
 export function areBoundsInitialized(bounds) {
@@ -1962,6 +1963,7 @@ export function computeBoundsFromPoints(point1, point2, bounds) {
   bounds[3] = Math.max(point1[1], point2[1]);
   bounds[4] = Math.min(point1[2], point2[2]);
   bounds[5] = Math.max(point1[2], point2[2]);
+  return bounds;
 }
 
 export function clampValue(value, minValue, maxValue) {
@@ -1974,7 +1976,7 @@ export function clampValue(value, minValue, maxValue) {
   return value;
 }
 
-export function clampVector(vector, minVector, maxVector, out = []) {
+export function clampVector(vector, minVector, maxVector, out = [0, 0, 0]) {
   out[0] = clampValue(vector[0], minVector[0], maxVector[0]);
   out[1] = clampValue(vector[1], minVector[1], maxVector[1]);
   out[2] = clampValue(vector[2], minVector[2], maxVector[2]);

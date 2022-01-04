@@ -12,12 +12,16 @@ import json from '@rollup/plugin-json';
 import nodePolyfills from 'rollup-plugin-polyfill-node';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import postcss from 'rollup-plugin-postcss';
-import replace from 'rollup-plugin-re';
 import { string } from 'rollup-plugin-string';
 import svgo from 'rollup-plugin-svgo';
 import webworkerLoader from 'rollup-plugin-web-worker-loader';
+import copy from 'rollup-plugin-copy';
+
+import pkg from './package.json';
 
 import { rewriteFilenames } from './Utilities/rollup/plugin-rewrite-filenames';
+
+const absolutifyImports = require('./Utilities/build/absolutify-imports.js');
 
 const IGNORE_LIST = [
   /[/\\]example_?[/\\]/,
@@ -49,10 +53,15 @@ entryPoints.forEach((entry) => {
   entries[entry.replace(/^Sources[/\\]/, '')] = entry;
 });
 
+const outputDir = path.resolve('dist', 'esm');
+
+const dependencies = Object.keys(pkg.dependencies || []);
+const peerDependencies = Object.keys(pkg.peerDependencies || []);
+
 export default {
   input: entries,
   output: {
-    dir: 'dist/esm/',
+    dir: outputDir,
     format: 'es',
     hoistTransitiveImports: false,
     entryFileNames(chunkInfo) {
@@ -73,12 +82,12 @@ export default {
     chunkFileNames(chunkInfo) {
       let name = chunkInfo.name;
 
-      if (name.includes('node_modules')) {
-        return name.replace('node_modules', 'vendor');
-      }
-
       if (!name.endsWith('.js')) {
         name += '.js';
+      }
+
+      if (name.includes('node_modules')) {
+        return name.replace('node_modules', 'vendor');
       }
 
       // throw all subscript prefixed chunks into a virtual folder
@@ -90,39 +99,11 @@ export default {
       return name.replace(/^Sources[/\\]/, '');
     },
   },
-  external: [/@babel\/runtime/],
+  external: [
+    ...dependencies.map((name) => new RegExp(`^${name}`)),
+    ...peerDependencies.map((name) => new RegExp(`^${name}`)),
+  ],
   plugins: [
-    // should be before commonjs
-    replace({
-      patterns: [
-        {
-          // match against jszip/lib/load.js
-          // Workaround until https://github.com/Stuk/jszip/pull/731 is merged
-          include: path.resolve(
-            __dirname,
-            'node_modules',
-            'jszip',
-            'lib',
-            'load.js'
-          ),
-          test: /'use strict';\nvar utils = require\('.\/utils'\);/m,
-          replace: "'use strict'",
-        },
-        {
-          // match against jszip/lib/compressedObject.js
-          // Workaround until https://github.com/Stuk/jszip/pull/731 is merged
-          include: path.resolve(
-            __dirname,
-            'node_modules',
-            'jszip',
-            'lib',
-            'compressedObject.js'
-          ),
-          test: /Crc32Probe'\);\nvar DataLengthProbe = require\('.\/stream\/DataLengthProbe'\);/m,
-          replace: "Crc32Probe');\n",
-        },
-      ],
-    }),
     alias({
       entries: [
         { find: 'vtk.js', replacement: path.resolve(__dirname) },
@@ -135,9 +116,10 @@ export default {
       targetPlatform: 'browser',
       // needs to match the full import statement path
       pattern: /^.+\.worker(?:\.js)?$/,
-      // inline: true,
-      // preserveSource: true,
-      // outputFolder: 'WebWorkers',
+      // inline externals for webworkers
+      external: [],
+      inline: true,
+      preserveSource: true,
     }),
     nodeResolve({
       // don't rely on node builtins for web
@@ -177,6 +159,65 @@ export default {
     rewriteFilenames({
       find: /:/g,
       replace: '_',
+    }),
+    // copy package assets
+    copy({
+      flatten: false,
+      targets: [
+        {
+          src: 'Sources/**/*.d.ts',
+          dest: outputDir,
+          rename(name, ext, fullPath) {
+            const filename = `${name}.${ext}`;
+            if (filename === 'index.d.ts') {
+              const moduleName = path.basename(path.dirname(fullPath));
+              return `../${moduleName}.d.ts`;
+            }
+            return `${name}.${ext}`;
+          },
+          transform(content, base) {
+            // transforms typescript defs to use absolute package imports
+            if (base.endsWith('.d.ts')) {
+              return absolutifyImports(content.toString(), (relImport) => {
+                const importPath = path.join(path.dirname(base), relImport);
+                const relativeStart = path.join(__dirname, 'Sources');
+                // rollup builds are for the @kitware/vtk.js package
+                return path.join(
+                  '@kitware/vtk.js',
+                  path.relative(relativeStart, importPath)
+                );
+              });
+            }
+            return content;
+          },
+        },
+      ],
+    }),
+    copy({
+      flatten: true,
+      targets: [
+        { src: 'Utilities/XMLConverter', dest: `${outputDir}/Utilities` },
+        { src: 'Utilities/DataGenerator', dest: `${outputDir}/Utilities` },
+        { src: 'Utilities/prepare.js', dest: `${outputDir}/Utilities` },
+        { src: 'Utilities/config/*', dest: `${outputDir}/Utilities/config` },
+        { src: 'Utilities/build/macro-shim.d.ts', dest: outputDir, rename: 'macro.d.ts' },
+        { src: 'Utilities/build/macro-shim.js', dest: outputDir, rename: 'macro.js' },
+        { src: '*.txt', dest: outputDir },
+        { src: '*.md', dest: outputDir },
+        { src: '.npmignore', dest: outputDir },
+        { src: 'LICENSE', dest: outputDir },
+        {
+          src: 'package.json',
+          dest: outputDir,
+          transform(content) {
+            const pkg = JSON.parse(content);
+            pkg.name = '@kitware/vtk.js';
+            pkg.main = './index.js';
+            pkg.module = './index.js';
+            return JSON.stringify(pkg, null, 2);
+          },
+        },
+      ],
     }),
   ],
 };

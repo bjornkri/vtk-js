@@ -14,7 +14,7 @@ Chrome Canary when WebGPU is enabled. You have to set --enable-unsafe-webgpu
 there is a test target named test:webgpu that will specificly try to run
 tests using chrome canary.
 
-Note that as of April 2021 WebGPU is changing daily, so this code may
+Note that as of October 2021 WebGPU is changing daily, so this code may
 break daily as they change and interate on the API.
 
 Lots of capabilities are currently not implemented.
@@ -29,22 +29,24 @@ is needed.
   gradient background, texture background, skybox etc
 - PBR lighting to replace the simple model currently coded
 - eventually switch to using IBOs and flat interpolation
-- cropping planes for polydata mapper
+- cropping planes for polydata, image, volume mappers
 - update widgets to use the new async hardware selector API
+- add rgb texture support to volume renderer
+- add lighting to volume rendering
+- add line zbuffer offset to handle coincident
+- possibly change the zbuffer equation to be linear float30
 
-- create new volume renderer built for multivolume rendering - in progress
+Waiting on fixes/dev in WebGPU spec
+- more cross platform testing and bug fixing, firefox and safari
+
+# Recently ToDone
+- image display (use 3d texture)
+- create new volume renderer built for multivolume rendering
   - traverse all volumes and register with volume pass - done
   - render all volumes hexahedra to get depth buffer near and far
     merged with opaque pass depth buffer - done
   - render all volumes in single mapper using prior near/far depth textures - in progress
-
-Waiting on fixes/dev in WebGPU spec
-
-- 3d textures (as of April 21 2021 Dawn lacks support for 1d and 3d)
-- image display (use 3d texture)
-- more cross platform testing and bug fixing
-
-# Recently ToDone
+- 3d textures
 - added bind groups
 - actor matrix support with auto shift (handle in renderer?)
 - add an example of customizing WebGPU
@@ -117,3 +119,52 @@ getBindGroupEntry()
 getBindGroupTime()
 getShaderCode(group, binding)
 ```
+
+## Private API
+Note that none of the classes in the WebGPU directory are meant to be accessed directly by application code. These classes implement one view of the data (WebGPU as opposed to WebGL). Typical applicaiton code will interface with the RenderWindowViewNode superclass (in the SceneGraph) directory as the main entry point for a view such as WebGL or WebGPU. As such, changes to the API of the WebGPU classes are considered private changes, internal to the implementation of this view.
+
+## Volume Rendering Approach
+
+The volume renderer in WebGPU starts in the ForwardPass, which if it detects volumes invokes a volume pass. The volume pass requests bounding boxes from all volumes and renders them, along with the opaque polygonal depth buffer to create min and max ray depth textures. These textures are bounds for each fragment's ray casting. Then the VolumePassFSQ gets invoked with these two bounding textures to actually perfom the ray casting of the voxels between the min and max.
+
+The ray casting is done for all volumes at once and the VolumePassFSQ class is where all the complexity and work is done.
+
+
+## Zbuffer implementation and calculations
+
+The depth buffer is stored as a 32bit float and ranges from 1.0 to 0.0. The distance to the near clipping plane is by far the largest factor determining the accuracy of the zbuffer. The farther out you can place the near plane the better. See https://zero-radiance.github.io/post/z-buffer/ for a more detailed analysis of why we use this approach.
+
+### Orthographic
+
+For orthographic projections the zbuffer ranges from 1.0 at the near plane to 0.0 at the far plane. The depth value in both the vertex and fragment shader is given as
+
+```position.z = (zVC + f)/(f - n)```
+
+within the fragment shader you can get the z value (in view coordinates)
+
+```zVC = position.z * (far - near) - far```
+
+The depth valus are linear in depth.
+
+### Perspective
+
+For perspective we use a reverse infinite far clip projection which ranges from 1.0 at the near plane to 0.0 at infinity. The depth value in the vertex shader is
+
+```position.z = near```
+```position.w = -zVC```
+
+and in the fragment after division by w as
+
+```position.z = -near / zVC```
+
+within the shader you can get the z value (in view coordinates)
+
+```zVC = -near / position.z```
+
+The depth values are not linear in depth.
+
+You can offset geometry by a factor cF ranging from 0.0 to 1.0 using the following forumla
+
+```z' = 1.0 - (1.0 - cF)*(1.0 - z)```
+```z' = z + cF - cF*z```
+```z' = (1.0 - cF)*z + cF```

@@ -1,12 +1,13 @@
 import { vtkAlgorithm, vtkObject } from "../../../interfaces";
+import { Vector3 } from "../../../types";
 
 /**
  *
  */
-interface ILineSourceInitialValues {
+export interface ILineSourceInitialValues {
 	resolution?: number;
-	point1?: number[];
-	point2?: number[];
+	point1?: Vector3;
+	point2?: Vector3;
 	pointType?: string;
 }
 
@@ -24,26 +25,26 @@ export interface vtkLineSource extends vtkLineSourceBase {
 	 * Get the starting point of the line.
 	 * @default [-1, 0, 0]
 	 */
-	getPoint1(): number[];
+	getPoint1(): Vector3;
 
 	/**
 	 * Get the starting point of the line.
 	 */
-	getPoint1ByReference(): number[];
+	getPoint1ByReference(): Vector3;
 
 	/**
 	 * Get the ending point of the line.
 	 * @default [1, 0, 0]
 	 */
-	getPoint2(): number[];
+	getPoint2(): Vector3;
 
 	/**
 	 * Get the ending point of the line.
 	 */
-	getPoint2ByReference(): number[];
+	getPoint2ByReference(): Vector3;
 
 	/**
-	 * Get the x resolution of the line.
+	 * Get the resolution of the line.
 	 * @default 6
 	 */
 	getResolution(): number;
@@ -65,15 +66,15 @@ export interface vtkLineSource extends vtkLineSourceBase {
 
 	/**
 	 * Set the starting point of the line.
-	 * @param {Number[]} point1 The starting point's coordinates.
+	 * @param {Vector3} point1 The starting point's coordinates.
 	 */
-	setPoint1(point1: number[]): boolean;
+	setPoint1(point1: Vector3): boolean;
 
 	/**
 	 * Set the starting point of the line.
-	 * @param {Number[]} point1 The starting point's coordinates.
+	 * @param {Vector3} point1 The starting point's coordinates.
 	 */
-	setPoint1From(point1: number[]): boolean;
+	setPoint1From(point1: Vector3): boolean;
 
 	/**
 	 * Set the ending point of the line.
@@ -85,13 +86,13 @@ export interface vtkLineSource extends vtkLineSourceBase {
 
 	/**
 	 * Set the ending point of the line.
-	 * @param {Number[]} point2 The ending point's coordinates.
+	 * @param {Vector3} point2 The ending point's coordinates.
 	 */
-	setPoint2From(point2: number[]): boolean;
+	setPoint2From(point2: Vector3): boolean;
 
 	/**
-	 * Set the number of facets used to represent the cone.
-	 * @param {Number} resolution The number of facets.
+	 * Set the number of segments used to represent the line.
+	 * @param {Number} resolution The number of segments.
 	 */
 	setResolution(resolution: number): boolean;
 }
@@ -112,15 +113,13 @@ export function extend(publicAPI: object, model: object, initialValues?: ILineSo
 export function newInstance(initialValues?: ILineSourceInitialValues): vtkLineSource;
 
 /**
- * vtkLineSource creates a polygonal cylinder centered at Center;
- * The axis of the cylinder is aligned along the global y-axis.
- * The height and radius of the cylinder can be specified, as well as the number of sides.
- * It is also possible to control whether the cylinder is open-ended or capped.
- * If you have the end points of the cylinder, you should use a vtkLineSource followed by a vtkTubeFilter instead of the vtkLineSource.
+ * vtkLineSource creates a line segment from point1 to point2;
+ * The resolution can be specified, which determines the number of points along the line.
+ * Following a vtkLineSource by a vtkTubeFilter is a convenient way to create a cylinder based on endpoints.
  * 
  * @example
  * ```js
- * import vtkLineSource from 'vtk.js/Sources/Filters/Sources/LineSource';
+ * import vtkLineSource from '@kitware/vtk.js/Filters/Sources/LineSource';
  * 
  * const line = vtkLineSource.newInstance({ resolution: 10 });
  * const polydata = line.getOutputData();

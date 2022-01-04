@@ -1,6 +1,6 @@
-import vtkActor from '../Actor';
+import vtkActor, { IActorInitialValues } from '../Actor';
 
-export interface IFaceProperty {
+export interface IStyle {
 	text?: string;
 	faceColor?: string;
 	faceRotation?: number;
@@ -12,18 +12,23 @@ export interface IFaceProperty {
 	edgeColor?: string;
 }
 
+export interface IFaceProperty {
+	text?: string;
+	faceRotation?: number;
+}
+
 /**
  * 
  */
-interface IAnnotatedCubeActorInitialValues {
+export interface IAnnotatedCubeActorInitialValues extends IActorInitialValues {
 }
 
 export interface vtkAnnotatedCubeActor extends vtkActor {
 	/**
 	 * Set the default style.
-	 * @param style
+	 * @param {IStyle} style
 	 */
-	setDefaultStyle(style: any): boolean;
+	setDefaultStyle(style: IStyle): boolean;
 
 	/**
 	 * The +X face property.
@@ -33,31 +38,31 @@ export interface vtkAnnotatedCubeActor extends vtkActor {
 
 	/**
 	 * The -X face property.
-	 * @param {IFaceProperty} prop -X  face property
+	 * @param {IFaceProperty} prop The -X face property.
 	 */
 	setXMinusFaceProperty(prop: IFaceProperty): boolean;
 
 	/**
 	 * The +Y face property.
-	 * @param {IFaceProperty} prop +Y face property
+	 * @param {IFaceProperty} prop The +Y face property.
 	 */
 	setYPlusFaceProperty(prop: IFaceProperty): boolean;
 
 	/**
 	 * The -Y face property.
-	 * @param {IFaceProperty} prop -Y ace property
+	 * @param {IFaceProperty} prop The -Y ace property.
 	 */
 	setYMinusFaceProperty(prop: IFaceProperty): boolean;
 
 	/**
 	 * The +Z face property.
-	 * @param {IFaceProperty} prop +Z face property
+	 * @param {IFaceProperty} prop The +Z face property.
 	 */
 	setZPlusFaceProperty(prop: IFaceProperty): boolean;
 
 	/**
 	 * The -Z face property.
-	 * @param {IFaceProperty} prop -Z face property
+	 * @param {IFaceProperty} prop The -Z face property.
 	 */
 	setZMinusFaceProperty(prop: IFaceProperty): boolean;
 }
@@ -98,4 +103,3 @@ export declare const vtkAnnotatedCubeActor: {
 	extend: typeof extend,
 };
 export default vtkAnnotatedCubeActor;
-

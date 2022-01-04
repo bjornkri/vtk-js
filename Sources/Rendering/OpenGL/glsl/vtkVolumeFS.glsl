@@ -27,7 +27,7 @@ varying vec3 vertexVCVSOutput;
 // always set vtkNumComponents 1,2,3,4
 //VTK::NumComponents
 
-// possibly define vtkUseTriliear
+// possibly define vtkTrilinearOn
 //VTK::TrilinearOn
 
 // possibly define vtkIndependentComponents
@@ -182,6 +182,9 @@ uniform float cshift3;
 uniform float cscale3;
 #endif
 
+uniform vec4 ipScalarRangeMin;
+uniform vec4 ipScalarRangeMax;
+
 // declaration for intermixed geometry
 //VTK::ZBuffer::Dec
 
@@ -221,8 +224,8 @@ uniform int xreps;
 uniform int xstride;
 uniform int ystride;
 
-// if computing triliear values from multiple z slices
-#ifdef vtkTriliearOn
+// if computing trilinear values from multiple z slices
+#ifdef vtkTrilinearOn
 vec4 getTextureValue(vec3 ijk)
 {
   float zoff = 1.0/float(volumeDimensions.z);
@@ -795,17 +798,6 @@ void applyBlend(vec3 posIS, vec3 endIS, float sampleDistanceIS, vec3 tdims)
     gl_FragData[0] = getColorForValue(value, posIS, tstep);
   #endif
   #if vtkBlendMode == 3 || vtkBlendMode == 4 //AVERAGE_INTENSITY_BLEND || ADDITIVE_BLEND
-    vec4 ipScalarRangeMin = vec4 (
-      //VTK::IPScalarRangeMin,
-      //VTK::IPScalarRangeMin,
-      //VTK::IPScalarRangeMin,
-      //VTK::IPScalarRangeMax);
-    vec4 ipScalarRangeMax = vec4(
-      //VTK::IPScalarRangeMax,
-      //VTK::IPScalarRangeMax,
-      //VTK::IPScalarRangeMax,
-      //VTK::IPScalarRangeMax);
-
     vec4 sum = vec4(0.);
 
     if (valueWithinScalarRange(tValue, ipScalarRangeMin, ipScalarRangeMax)) {

@@ -1,4 +1,5 @@
 import macro from 'vtk.js/Sources/macros';
+import HalfFloat from 'vtk.js/Sources/Common/Core/HalfFloat';
 import vtkWebGPUBufferManager from 'vtk.js/Sources/Rendering/WebGPU/BufferManager';
 import vtkWebGPUTextureView from 'vtk.js/Sources/Rendering/WebGPU/TextureView';
 import vtkWebGPUTypes from 'vtk.js/Sources/Rendering/WebGPU/Types';
@@ -76,27 +77,45 @@ function vtkWebGPUTexture(publicAPI, model) {
       // bytesPerRow must be a multiple of 256 so we might need to rebuild
       // the data here before passing to the buffer. e.g. if it is unorm8x4 then
       // we need to have width be a multiple of 64
-      const currWidthInBytes = model.width * tDetails.stride;
-      if (currWidthInBytes % 256) {
-        const oArray = req.dataArray.getData();
-        const bufferWidthInBytes =
-          256 * Math.floor((currWidthInBytes + 255) / 256);
-        const bufferWidth = bufferWidthInBytes / oArray.BYTES_PER_ELEMENT;
-        const oWidth = currWidthInBytes / oArray.BYTES_PER_ELEMENT;
+      const inWidthInBytes =
+        (req.nativeArray.length / (model.height * model.depth)) *
+        req.nativeArray.BYTES_PER_ELEMENT;
 
-        const nArray = macro.newTypedArray(
-          oArray.name,
-          bufferWidth * model.height * model.depth
+      // is this a half float texture?
+      const halfFloat =
+        tDetails.elementSize === 2 && tDetails.sampleType === 'float';
+
+      // if we need to copy the data
+      if (halfFloat || inWidthInBytes % 256) {
+        const inArray = req.nativeArray;
+        const inWidth = inWidthInBytes / inArray.BYTES_PER_ELEMENT;
+
+        const outBytesPerElement = tDetails.elementSize;
+        const outWidthInBytes =
+          256 * Math.floor((inWidth * outBytesPerElement + 255) / 256);
+        const outWidth = outWidthInBytes / outBytesPerElement;
+
+        const outArray = macro.newTypedArray(
+          halfFloat ? 'Uint16Array' : inArray.constructor.name,
+          outWidth * model.height * model.depth
         );
 
         for (let v = 0; v < model.height * model.depth; v++) {
-          nArray.set(
-            oArray.subarray(v * oWidth, (v + 1) * oWidth),
-            v * bufferWidth
-          );
+          if (halfFloat) {
+            for (let i = 0; i < inWidth; i++) {
+              outArray[v * outWidth + i] = HalfFloat.toHalf(
+                inArray[v * inWidth + i]
+              );
+            }
+          } else {
+            outArray.set(
+              inArray.subarray(v * inWidth, (v + 1) * inWidth),
+              v * outWidth
+            );
+          }
         }
-        buffRequest.nativeArray = nArray;
-        bufferBytesPerRow = bufferWidthInBytes;
+        buffRequest.nativeArray = outArray;
+        bufferBytesPerRow = outWidthInBytes;
       }
       const buff = model.device.getBufferManager().getBuffer(buffRequest);
       model.buffer = buff;
@@ -154,6 +173,21 @@ function vtkWebGPUTexture(publicAPI, model) {
     );
     model.device.submitCommandEncoder(cmdEnc);
     model.ready = true;
+  };
+
+  // when data is pulled out of this texture what scale must be applied to
+  // get back to the original source data. For formats such as r8unorm we
+  // have to multiply by 255.0, for formats such as r16float it is 1.0
+  publicAPI.getScale = () => {
+    const tDetails = vtkWebGPUTypes.getDetailsFromTextureFormat(model.format);
+    const halfFloat =
+      tDetails.elementSize === 2 && tDetails.sampleType === 'float';
+    return halfFloat ? 1.0 : 255.0;
+  };
+
+  publicAPI.getNumberOfComponents = () => {
+    const tDetails = vtkWebGPUTypes.getDetailsFromTextureFormat(model.format);
+    return tDetails.numComponents;
   };
 
   publicAPI.resizeToMatch = (tex) => {

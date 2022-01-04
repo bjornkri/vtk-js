@@ -4,23 +4,21 @@ import * as vtkMath from 'vtk.js/Sources/Common/Core/Math';
 import Constants from 'vtk.js/Sources/Rendering/Core/RenderWindowInteractor/Constants';
 
 const { Device, Input } = Constants;
-const {
-  vtkWarningMacro,
-  vtkErrorMacro,
-  normalizeWheel,
-  vtkOnceErrorMacro,
-} = macro;
+const { vtkWarningMacro, vtkErrorMacro, normalizeWheel, vtkOnceErrorMacro } =
+  macro;
 
 // ----------------------------------------------------------------------------
 // Global methods
 // ----------------------------------------------------------------------------
 
 const deviceInputMap = {
-  'OpenVR Gamepad': [
-    Input.TrackPad,
+  'xr-standard': [
     Input.Trigger,
     Input.Grip,
-    Input.ApplicationMenu,
+    Input.TrackPad,
+    Input.Thumbstick,
+    Input.A,
+    Input.B,
   ],
 };
 
@@ -370,7 +368,7 @@ function vtkRenderWindowInteractor(publicAPI, model) {
       return;
     }
     animationRequesters.add(requestor);
-    if (animationRequesters.size === 1) {
+    if (animationRequesters.size === 1 && !model.xrAnimation) {
       model.lastFrameTime = 0.1;
       model.lastFrameStart = Date.now();
       model.animationRequest = requestAnimationFrame(publicAPI.handleAnimation);
@@ -379,7 +377,7 @@ function vtkRenderWindowInteractor(publicAPI, model) {
   };
 
   publicAPI.isAnimating = () =>
-    model.vrAnimation || model.animationRequest !== null;
+    model.xrAnimation || model.animationRequest !== null;
 
   publicAPI.cancelAnimation = (requestor, skipWarning = false) => {
     if (!animationRequesters.has(requestor)) {
@@ -402,72 +400,75 @@ function vtkRenderWindowInteractor(publicAPI, model) {
     }
   };
 
-  publicAPI.switchToVRAnimation = () => {
+  publicAPI.switchToXRAnimation = () => {
     // cancel existing animation if any
     if (model.animationRequest) {
       cancelAnimationFrame(model.animationRequest);
       model.animationRequest = null;
     }
-    model.vrAnimation = true;
+    model.xrAnimation = true;
   };
 
-  publicAPI.returnFromVRAnimation = () => {
-    model.vrAnimation = false;
+  publicAPI.returnFromXRAnimation = () => {
+    model.xrAnimation = false;
     if (animationRequesters.size !== 0) {
       model.FrameTime = -1;
       model.animationRequest = requestAnimationFrame(publicAPI.handleAnimation);
     }
   };
 
-  publicAPI.updateGamepads = (displayId) => {
-    const gamepads = navigator.getGamepads();
-
+  publicAPI.updateXRGamepads = (xrSession, xrFrame, xrRefSpace) => {
     // watch for when buttons change state and fire events
-    for (let i = 0; i < gamepads.length; ++i) {
-      const gp = gamepads[i];
-      if (gp && gp.displayId === displayId) {
+    xrSession.inputSources.forEach((inputSource) => {
+      const pose = xrFrame.getPose(inputSource.gripSpace, xrRefSpace);
+      const gp = inputSource.gamepad;
+      const hand = inputSource.handedness;
+      if (gp) {
         if (!(gp.index in model.lastGamepadValues)) {
-          model.lastGamepadValues[gp.index] = { buttons: {} };
+          model.lastGamepadValues[gp.index] = {
+            left: { buttons: {} },
+            right: { buttons: {} },
+          };
         }
         for (let b = 0; b < gp.buttons.length; ++b) {
-          if (!(b in model.lastGamepadValues[gp.index].buttons)) {
-            model.lastGamepadValues[gp.index].buttons[b] = false;
+          if (!(b in model.lastGamepadValues[gp.index][hand].buttons)) {
+            model.lastGamepadValues[gp.index][hand].buttons[b] = false;
           }
           if (
-            model.lastGamepadValues[gp.index].buttons[b] !==
+            model.lastGamepadValues[gp.index][hand].buttons[b] !==
             gp.buttons[b].pressed
           ) {
             publicAPI.button3DEvent({
               gamepad: gp,
-              position: gp.pose.position,
-              orientation: gp.pose.orientation,
+              position: pose.transform.position,
+              orientation: pose.transform.orientation,
               pressed: gp.buttons[b].pressed,
               device:
-                gp.hand === 'left'
+                inputSource.handedness === 'left'
                   ? Device.LeftController
                   : Device.RightController,
               input:
-                deviceInputMap[gp.id] && deviceInputMap[gp.id][b]
-                  ? deviceInputMap[gp.id][b]
+                deviceInputMap[gp.mapping] && deviceInputMap[gp.mapping][b]
+                  ? deviceInputMap[gp.mapping][b]
                   : Input.Trigger,
             });
-            model.lastGamepadValues[gp.index].buttons[b] =
+            model.lastGamepadValues[gp.index][hand].buttons[b] =
               gp.buttons[b].pressed;
           }
-          if (model.lastGamepadValues[gp.index].buttons[b]) {
+          if (model.lastGamepadValues[gp.index][hand].buttons[b]) {
             publicAPI.move3DEvent({
               gamepad: gp,
-              position: gp.pose.position,
-              orientation: gp.pose.orientation,
+              position: pose.transform.position,
+              orientation: pose.transform.orientation,
               device:
-                gp.hand === 'left'
+                inputSource.handedness === 'left'
                   ? Device.LeftController
                   : Device.RightController,
             });
           }
         }
       }
-    }
+    });
   };
 
   publicAPI.handleMouseMove = (event) => {
@@ -760,7 +761,7 @@ function vtkRenderWindowInteractor(publicAPI, model) {
   // do not want extra renders as the make the apparent interaction
   // rate slower.
   publicAPI.render = () => {
-    if (model.animationRequest === null && !model.inRender) {
+    if (!publicAPI.isAnimating() && !model.inRender) {
       forceRender();
     }
   };

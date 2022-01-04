@@ -7,9 +7,11 @@ The library can be built with webpack automatically. Webpack can either gather a
 
 ## Building vtk.js
 
-In order to build the library you can run `npm run build` for quick development usage or `npm run build:release` for production usage.
+First, install dependencies by running `npm install`.
 
-Either of these commands will generate a `dist/vtk.js` file that can then be used as an external script.
+In order to build the library, you can run `npm run build` to build both the ES Module (`@kitware/vtk.js`) and UMD+Sources (`vtk.js`) packages for production usage. Both builds will be located in `dist/esm` and `dist/umd`, respectively. If you only want either the ESM or UMD+Sources build, you can run `npm run build:esm` or `npm run build:umd`, respectively.
+
+For development purposes, you can run `npm run dev:esm` or `npm run dev:umd` to start a build process that watches the project for changes.
 
 ## Building the website
 
@@ -36,3 +38,7 @@ $ npm run doc -- -s -f ExampleNameThatDoesNotExist
 ```
 
 `ExampleNameThatDoesNotExist` can be replaced by multiple real example names and the doc tool will only build those examples.
+
+## Building versus installing
+
+When you use vtk.js as a dependency in your project (e.g. [like this](https://kitware.github.io/vtk-js/docs/vtk_vanilla.html)) you are pulling a package that was put together by the continuous integration. When developing vtk.js, you will have to put that package together yourself, and we call that "building."
