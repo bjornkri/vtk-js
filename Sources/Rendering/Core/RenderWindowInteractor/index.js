@@ -59,6 +59,7 @@ const handledEvents = [
   'StartInteraction',
   'Interaction',
   'EndInteraction',
+  'AnimationFrameRateUpdate',
 ];
 
 function preventDefault(event) {
@@ -369,6 +370,8 @@ function vtkRenderWindowInteractor(publicAPI, model) {
     }
     animationRequesters.add(requestor);
     if (animationRequesters.size === 1 && !model.xrAnimation) {
+      model._animationStartTime = Date.now();
+      model._animationFrameCount = 0;
       model.lastFrameTime = 0.1;
       model.lastFrameStart = Date.now();
       model.animationRequest = requestAnimationFrame(publicAPI.handleAnimation);
@@ -420,7 +423,10 @@ function vtkRenderWindowInteractor(publicAPI, model) {
   publicAPI.updateXRGamepads = (xrSession, xrFrame, xrRefSpace) => {
     // watch for when buttons change state and fire events
     xrSession.inputSources.forEach((inputSource) => {
-      const pose = xrFrame.getPose(inputSource.gripSpace, xrRefSpace);
+      const gripPose =
+        inputSource.gripSpace == null
+          ? null
+          : xrFrame.getPose(inputSource.gripSpace, xrRefSpace);
       const gp = inputSource.gamepad;
       const hand = inputSource.handedness;
       if (gp) {
@@ -436,12 +442,13 @@ function vtkRenderWindowInteractor(publicAPI, model) {
           }
           if (
             model.lastGamepadValues[gp.index][hand].buttons[b] !==
-            gp.buttons[b].pressed
+              gp.buttons[b].pressed &&
+            gripPose != null
           ) {
             publicAPI.button3DEvent({
               gamepad: gp,
-              position: pose.transform.position,
-              orientation: pose.transform.orientation,
+              position: gripPose.transform.position,
+              orientation: gripPose.transform.orientation,
               pressed: gp.buttons[b].pressed,
               device:
                 inputSource.handedness === 'left'
@@ -455,11 +462,14 @@ function vtkRenderWindowInteractor(publicAPI, model) {
             model.lastGamepadValues[gp.index][hand].buttons[b] =
               gp.buttons[b].pressed;
           }
-          if (model.lastGamepadValues[gp.index][hand].buttons[b]) {
+          if (
+            model.lastGamepadValues[gp.index][hand].buttons[b] &&
+            gripPose != null
+          ) {
             publicAPI.move3DEvent({
               gamepad: gp,
-              position: pose.transform.position,
-              orientation: pose.transform.orientation,
+              position: gripPose.transform.position,
+              orientation: gripPose.transform.orientation,
               device:
                 inputSource.handedness === 'left'
                   ? Device.LeftController
@@ -496,6 +506,18 @@ function vtkRenderWindowInteractor(publicAPI, model) {
 
   publicAPI.handleAnimation = () => {
     const currTime = Date.now();
+    model._animationFrameCount++;
+    if (
+      currTime - model._animationStartTime > 1000.0 &&
+      model._animationFrameCount > 1
+    ) {
+      model.recentAnimationFrameRate =
+        (1000.0 * (model._animationFrameCount - 1)) /
+        (currTime - model._animationStartTime);
+      publicAPI.animationFrameRateUpdateEvent();
+      model._animationStartTime = currTime;
+      model._animationFrameCount = 1;
+    }
     if (model.FrameTime === -1.0) {
       model.lastFrameTime = 0.1;
     } else {
@@ -544,7 +566,7 @@ function vtkRenderWindowInteractor(publicAPI, model) {
     model.wheelTimeoutID = setTimeout(() => {
       publicAPI.endMouseWheelEvent();
       model.wheelTimeoutID = 0;
-    }, 200);
+    }, 800);
   };
 
   publicAPI.handleMouseEnter = (event) => {
@@ -701,7 +723,7 @@ function vtkRenderWindowInteractor(publicAPI, model) {
   };
 
   publicAPI.getFirstRenderer = () =>
-    model.view.getRenderable().getRenderersByReference()[0];
+    model.view?.getRenderable()?.getRenderersByReference()?.[0];
 
   publicAPI.findPokedRenderer = (x = 0, y = 0) => {
     if (!model.view) {
@@ -709,7 +731,10 @@ function vtkRenderWindowInteractor(publicAPI, model) {
     }
     // The original order of renderers needs to remain as
     // the first one is the one we want to manipulate the camera on.
-    const rc = model.view.getRenderable().getRenderers();
+    const rc = model.view?.getRenderable()?.getRenderers();
+    if (!rc) {
+      return null;
+    }
     rc.sort((a, b) => a.getLayer() - b.getLayer());
     let interactiveren = null;
     let viewportren = null;
@@ -977,6 +1002,8 @@ function vtkRenderWindowInteractor(publicAPI, model) {
 
   publicAPI.handleVisibilityChange = () => {
     model.lastFrameStart = Date.now();
+    model._animationStartTime = Date.now();
+    model._animationFrameCount = 0;
   };
 
   publicAPI.setCurrentRenderer = (r) => {
@@ -1033,6 +1060,7 @@ const DEFAULT_VALUES = {
   currentGesture: 'Start',
   animationRequest: null,
   lastFrameTime: 0.1,
+  recentAnimationFrameRate: 10.0,
   wheelTimeoutID: 0,
   moveTimeoutID: 0,
   lastGamepadValues: {},
@@ -1057,6 +1085,7 @@ export function extend(publicAPI, model, initialValues = {}) {
     'container',
     'interactorStyle',
     'lastFrameTime',
+    'recentAnimationFrameRate',
     'view',
   ]);
 
