@@ -241,7 +241,7 @@ function vtkWebGPUImageMapper(publicAPI, model) {
 
         const target = iComps ? i : 0;
         const cfun = actor.getProperty().getRGBTransferFunction(target);
-        if (cfun) {
+        if (cfun && actor.getProperty().getUseLookupTableScalarRange()) {
           const cRange = cfun.getRange();
           cw = cRange[1] - cRange[0];
           cl = 0.5 * (cRange[1] + cRange[0]);
@@ -342,7 +342,7 @@ function vtkWebGPUImageMapper(publicAPI, model) {
   publicAPI.updateBuffers = (device) => {
     const treq = {
       imageData: model.currentInput,
-      source: model.currentInput,
+      owner: model.currentInput.getPointData().getScalars(),
     };
     const newTex = device.getTextureManager().getTexture(treq);
     const tViews = model.helper.getTextureViews();

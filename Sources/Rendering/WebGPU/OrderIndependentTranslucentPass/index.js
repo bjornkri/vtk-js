@@ -141,21 +141,21 @@ function vtkWebGPUOrderIndependentTranslucentPass(publicAPI, model) {
     rDesc.colorAttachments = [
       {
         view: undefined,
-        loadValue: [0.0, 0.0, 0.0, 0.0],
+        clearValue: [0.0, 0.0, 0.0, 0.0],
+        loadOp: 'clear',
         storeOp: 'store',
       },
       {
         view: undefined,
-        loadValue: [1.0, 0.0, 0.0, 0.0],
+        clearValue: [1.0, 0.0, 0.0, 0.0],
+        loadOp: 'clear',
         storeOp: 'store',
       },
     ];
     rDesc.depthStencilAttachment = {
       view: undefined,
-      depthLoadValue: 'load',
+      depthLoadOp: 'load',
       depthStoreOp: 'store',
-      stencilLoadValue: 'load',
-      stencilStoreOp: 'store',
     };
 
     model.translucentRenderEncoder.setReplaceShaderCodeFunction((pipeline) => {
@@ -219,7 +219,7 @@ function vtkWebGPUOrderIndependentTranslucentPass(publicAPI, model) {
       colorAttachments: [
         {
           view: null,
-          loadValue: 'load',
+          loadOp: 'load',
           storeOp: 'store',
         },
       ],

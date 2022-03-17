@@ -1,4 +1,4 @@
-import { Bounds } from '../../../types';
+import { Bounds, Nullable } from '../../../types';
 
 import vtkCamera from '../Camera';
 import vtkLight from '../Light';
@@ -47,14 +47,14 @@ export interface vtkRenderer extends vtkViewport {
 	isActiveCameraCreated(): boolean;
 
 	/**
-	 * 
-	 * @param actor 
+	 * Add different types of props to the renderer.
+	 * @param {vtkActor} actor The vtkActor instance.
 	 */
 	addActor(actor: vtkActor): boolean;
 
 	/**
 	 * Add a light to the list of lights.
-	 * @param light The vtkLight instance.
+	 * @param {vtkLight} light The vtkLight instance.
 	 */
 	addLight(light: vtkLight): void;
 
@@ -75,9 +75,9 @@ export interface vtkRenderer extends vtkViewport {
 	createLight(): vtkLight;
 
 	/**
-	 * 
+	 * Compute the bounding box of all the visible props Used in ResetCamera() and ResetCameraClippingRange()
 	 */
-	computeVisiblePropBounds(): number[];
+	computeVisiblePropBounds(): Bounds;
 
 	/**
 	 * Get the active camera
@@ -128,6 +128,7 @@ export interface vtkRenderer extends vtkViewport {
 	 * 
 	 */
 	getClippingRangeExpansion(): number;
+
 	/**
 	 * 
 	 * @default null
@@ -226,7 +227,7 @@ export interface vtkRenderer extends vtkViewport {
 	 * 
 	 * @default null
 	 */
-	getRenderWindow(): vtkRenderWindow | null;
+	getRenderWindow(): Nullable<vtkRenderWindow>;
 
 	/**
 	 * 
@@ -337,7 +338,7 @@ export interface vtkRenderer extends vtkViewport {
 	 * Specify the camera to use for this renderer.
 	 * @param {vtkCamera} camera The camera object to use.
 	 */
-	setActiveCamera(camera: vtkCamera | null): boolean;
+	setActiveCamera(camera: vtkCamera): boolean;
 
 	/**
 	 * 
