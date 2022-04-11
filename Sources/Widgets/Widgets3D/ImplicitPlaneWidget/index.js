@@ -21,16 +21,16 @@ function widgetBehavior(publicAPI, model) {
   publicAPI.updateCursor = () => {
     switch (model.activeState.getUpdateMethodName()) {
       case 'updateFromOrigin':
-        model.apiSpecificRenderWindow.setCursor('crosshair');
+        model._apiSpecificRenderWindow.setCursor('crosshair');
         break;
       case 'updateFromPlane':
-        model.apiSpecificRenderWindow.setCursor('move');
+        model._apiSpecificRenderWindow.setCursor('move');
         break;
       case 'updateFromNormal':
-        model.apiSpecificRenderWindow.setCursor('alias');
+        model._apiSpecificRenderWindow.setCursor('alias');
         break;
       default:
-        model.apiSpecificRenderWindow.setCursor('grabbing');
+        model._apiSpecificRenderWindow.setCursor('grabbing');
         break;
     }
   };
@@ -47,7 +47,7 @@ function widgetBehavior(publicAPI, model) {
     model.lineManipulator.setOrigin(model.widgetState.getOrigin());
     model.planeManipulator.setOrigin(model.widgetState.getOrigin());
     model.trackballManipulator.reset(callData); // setup trackball delta
-    model.interactor.requestAnimation(publicAPI);
+    model._interactor.requestAnimation(publicAPI);
     publicAPI.invokeStartInteractionEvent();
 
     return macro.EVENT_ABORT;
@@ -63,7 +63,7 @@ function widgetBehavior(publicAPI, model) {
   publicAPI.handleLeftButtonRelease = () => {
     if (isDragging && model.pickable) {
       publicAPI.invokeEndInteractionEvent();
-      model.interactor.cancelAnimation(publicAPI);
+      model._interactor.cancelAnimation(publicAPI);
     }
     isDragging = false;
     model.widgetState.deactivate();
@@ -86,7 +86,7 @@ function widgetBehavior(publicAPI, model) {
     model.planeManipulator.setNormal(model.widgetState.getNormal());
     const worldCoords = model.planeManipulator.handleEvent(
       callData,
-      model.apiSpecificRenderWindow
+      model._apiSpecificRenderWindow
     );
 
     if (model.widgetState.containsPoint(worldCoords)) {
@@ -101,7 +101,7 @@ function widgetBehavior(publicAPI, model) {
     model.lineManipulator.setNormal(model.activeState.getNormal());
     const worldCoords = model.lineManipulator.handleEvent(
       callData,
-      model.apiSpecificRenderWindow
+      model._apiSpecificRenderWindow
     );
 
     if (model.widgetState.containsPoint(...worldCoords)) {
@@ -116,7 +116,7 @@ function widgetBehavior(publicAPI, model) {
 
     const newNormal = model.trackballManipulator.handleEvent(
       callData,
-      model.apiSpecificRenderWindow
+      model._apiSpecificRenderWindow
     );
     model.activeState.setNormal(newNormal);
   };

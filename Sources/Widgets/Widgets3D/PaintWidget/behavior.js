@@ -2,7 +2,7 @@ import macro from 'vtk.js/Sources/macros';
 import { vec3 } from 'gl-matrix';
 
 export default function widgetBehavior(publicAPI, model) {
-  model.painting = model.factory.getPainting();
+  model.painting = model._factory.getPainting();
 
   publicAPI.handleLeftButtonPress = (callData) => {
     if (!model.activeState || !model.activeState.getActive()) {
@@ -35,8 +35,8 @@ export default function widgetBehavior(publicAPI, model) {
       model.activeState &&
       model.activeState.getActive()
     ) {
-      const normal = model.camera.getDirectionOfProjection();
-      const up = model.camera.getViewUp();
+      const normal = model._camera.getDirectionOfProjection();
+      const up = model._camera.getViewUp();
       const right = [];
       vec3.cross(right, up, normal);
       model.activeState.setUp(...up);
@@ -46,7 +46,7 @@ export default function widgetBehavior(publicAPI, model) {
 
       const worldCoords = model.manipulator.handleEvent(
         callData,
-        model.apiSpecificRenderWindow
+        model._apiSpecificRenderWindow
       );
 
       if (worldCoords.length) {
@@ -77,9 +77,9 @@ export default function widgetBehavior(publicAPI, model) {
     if (!model.hasFocus) {
       model.activeState = model.widgetState.getHandle();
       model.activeState.activate();
-      model.interactor.requestAnimation(publicAPI);
+      model._interactor.requestAnimation(publicAPI);
 
-      const canvas = model.apiSpecificRenderWindow.getCanvas();
+      const canvas = model._apiSpecificRenderWindow.getCanvas();
       canvas.onmouseenter = () => {
         if (
           model.hasFocus &&
@@ -102,7 +102,7 @@ export default function widgetBehavior(publicAPI, model) {
 
   publicAPI.loseFocus = () => {
     if (model.hasFocus) {
-      model.interactor.cancelAnimation(publicAPI);
+      model._interactor.cancelAnimation(publicAPI);
     }
     model.widgetState.deactivate();
     model.widgetState.getHandle().deactivate();

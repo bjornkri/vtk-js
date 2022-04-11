@@ -234,7 +234,12 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
   };
 
   publicAPI.get3DContext = (
-    options = { preserveDrawingBuffer: false, depth: true, alpha: true }
+    options = {
+      preserveDrawingBuffer: false,
+      depth: true,
+      alpha: true,
+      powerPreference: 'high-performance',
+    }
   ) => {
     let result = null;
 
@@ -721,6 +726,12 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
         }
       });
     });
+  };
+
+  publicAPI.getHardwareMaximumLineWidth = () => {
+    const gl = publicAPI.get3DContext();
+    const lineWidthRange = gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE);
+    return lineWidthRange[1];
   };
 
   publicAPI.getGLInformations = () => {

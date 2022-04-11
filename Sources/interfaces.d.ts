@@ -1,6 +1,4 @@
 import vtkDataArray from "./Common/Core/DataArray";
-import vtkImageData from "./Common/DataModel/ImageData";
-import vtkPolyData from "./Common/DataModel/PolyData";
 import { vtkPipelineConnection } from "./types";
 
 /**
@@ -37,10 +35,10 @@ export interface vtkAlgorithm {
 
 	/**
 	 * Assign a data object as input.
-	 * @param {vtkPolyData} dataset 
+	 * @param dataset The dataset object.
 	 * @param {Number} [port] The port number (default 0).
 	 */
-	setInputData(dataset: vtkPolyData, port?: number): void;
+	setInputData(dataset: any, port?: number): void;
 
 	/**
 	 * @param {Number} [port] The port number (default 0).
@@ -75,7 +73,7 @@ export interface vtkAlgorithm {
 	 * port.
 	 * @param {Number} [port] The port number (default 0).
 	 */
-	getOutputData(port?: number): vtkImageData | vtkPolyData;
+	getOutputData(port?: number): any;
 
 	/**
 	 * 
@@ -253,6 +251,17 @@ export interface vtkObject {
 	 * ```
 	 */
 	getState(): object;
+
+	/**
+	 * Used internally by JSON.stringify to get the content to serialize.
+	 * Allow to call directly JSON.stringify on the vtkObject instead of using getState before doing so.
+	 *
+	 * ```
+	 * const actorStr = JSON.stringify(actor);
+	 * const newActor = vtk(JSON.parse(actorStr));
+	 * ```
+	 */
+	toJSON(): object;
 
 	/**
 	 * Try to copy the state of the other to ourselves by just using references.

@@ -19,6 +19,10 @@ function vtkSVGLandmarkRepresentation(publicAPI, model) {
   publicAPI.render = () => {
     const list = publicAPI.getRepresentationStates();
 
+    if (!list.length) {
+      return createSvgElement('g');
+    }
+
     const coords = [];
     const texts = [];
     list.forEach((state, index) => {
@@ -33,6 +37,9 @@ function vtkSVGLandmarkRepresentation(publicAPI, model) {
       }
     });
 
+    const state = list[0];
+    const isActive = state.getActive();
+
     return publicAPI.worldPointsToPixelSpace(coords).then((pixelSpace) => {
       const points2d = pixelSpace.coords;
       const winHeight = pixelSpace.windowSize[1];
@@ -46,7 +53,7 @@ function vtkSVGLandmarkRepresentation(publicAPI, model) {
         const x = xy[0];
         const y = winHeight - xy[1];
 
-        if (model.showCircle === true) {
+        if (model.circleProps && model.circleProps.visible) {
           const circle = publicAPI.createListenableSvgElement('circle', i);
           Object.keys(model.circleProps || {}).forEach((prop) =>
             circle.setAttribute(prop, model.circleProps[prop])
@@ -68,8 +75,8 @@ function vtkSVGLandmarkRepresentation(publicAPI, model) {
           text.setAttribute('x', x);
           text.setAttribute('y', y);
           // Vertical offset (dy) calculation based on VerticalTextAlignment
-          let dy = model.textProps.dy ? model.textProps.dy : 0;
-          switch (model.textProps.verticalAlign) {
+          let dy = model.textProps?.dy || 0;
+          switch (model.textProps?.verticalAlign) {
             case VerticalTextAlignment.MIDDLE:
               dy -= fontSize * (0.5 * splitText.length - j - 1);
               break;
@@ -83,11 +90,43 @@ function vtkSVGLandmarkRepresentation(publicAPI, model) {
           }
           text.setAttribute('dy', dy);
           text.setAttribute('font-size', fontSize);
-          if (model.fontProperties != null) {
+
+          if (model.fontProperties && model.fontProperties.fontFamily) {
             text.setAttribute('font-family', model.fontProperties.fontFamily);
-            text.setAttribute('font-weight', model.fontProperties.fontStyle);
-            text.setAttribute('fill', model.fontProperties.fontColor);
+          } else if (
+            isActive &&
+            model.strokeFontProperties &&
+            model.strokeFontProperties.fontFamily
+          ) {
+            text.setAttribute(
+              'font-family',
+              model.strokeFontProperties.fontFamily
+            );
           }
+
+          if (model.fontProperties && model.fontProperties.fontStyle) {
+            text.setAttribute('font-weight', model.fontProperties.fontStyle);
+          } else if (
+            isActive &&
+            model.strokeFontProperties &&
+            model.strokeFontProperties.fontStyle
+          ) {
+            text.setAttribute(
+              'font-weight',
+              model.strokeFontProperties.fontStyle
+            );
+          }
+
+          if (model.fontProperties && model.fontProperties.fontColor) {
+            text.setAttribute('fill', model.fontProperties.fontColor);
+          } else if (
+            isActive &&
+            model.strokeFontProperties &&
+            model.strokeFontProperties.fontColor
+          ) {
+            text.setAttribute('fill', model.strokeFontProperties.fontColor);
+          }
+
           text.textContent = subText;
           root.appendChild(text);
         });
@@ -105,21 +144,20 @@ function vtkSVGLandmarkRepresentation(publicAPI, model) {
 /**
  * textProps can contain any "svg" attribute (e.g. text-anchor, text-align,
  * alignment-baseline...)
- * @param {*} initialValues
- * @returns
  */
 function defaultValues(initialValues) {
   return {
     ...initialValues,
     circleProps: {
+      visible: false,
       r: 5,
       stroke: 'red',
       fill: 'red',
       ...initialValues.circleProps,
     },
-    textProps: {
-      fill: 'white',
-      ...initialValues.textProps,
+    fontProperties: {
+      fontColor: 'white',
+      ...initialValues.fontProperties,
     },
   };
 }
@@ -132,7 +170,7 @@ export function extend(publicAPI, model, initialValues = {}) {
   macro.setGet(publicAPI, model, [
     'circleProps',
     'fontProperties',
-    'name',
+    'strokeFontProperties',
     'textProps',
   ]);
 

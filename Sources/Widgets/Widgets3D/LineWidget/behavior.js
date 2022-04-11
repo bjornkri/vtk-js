@@ -39,10 +39,13 @@ export default function widgetBehavior(publicAPI, model) {
   function updateCursor(callData) {
     model.isDragging = true;
     model.previousPosition = [
-      ...model.manipulator.handleEvent(callData, model.apiSpecificRenderWindow),
+      ...model.manipulator.handleEvent(
+        callData,
+        model._apiSpecificRenderWindow
+      ),
     ];
-    model.apiSpecificRenderWindow.setCursor('grabbing');
-    model.interactor.requestAnimation(publicAPI);
+    model._apiSpecificRenderWindow.setCursor('grabbing');
+    model._interactor.requestAnimation(publicAPI);
   }
 
   // --------------------------------------------------------------------------
@@ -80,12 +83,12 @@ export default function widgetBehavior(publicAPI, model) {
     const textPropsCp = { ...model.representations[3].getTextProps() };
     textPropsCp.dy = dySign * Math.abs(textPropsCp.dy);
     model.representations[3].setTextProps(textPropsCp);
-    model.interactor.render();
+    model._interactor.render();
   };
 
   publicAPI.setText = (text) => {
     model.widgetState.getText().setText(text);
-    model.interactor.render();
+    model._interactor.render();
   };
 
   // --------------------------------------------------------------------------
@@ -104,11 +107,11 @@ export default function widgetBehavior(publicAPI, model) {
 
   function computeMousePosition(p1, callData) {
     const displayMousePos = publicAPI.computeWorldToDisplay(
-      model.renderer,
+      model._renderer,
       ...p1
     );
     const worldMousePos = publicAPI.computeDisplayToWorld(
-      model.renderer,
+      model._renderer,
       callData.position.x,
       callData.position.y,
       displayMousePos[2]
@@ -147,10 +150,10 @@ export default function widgetBehavior(publicAPI, model) {
 
   publicAPI.rotateHandlesToFaceCamera = () => {
     model.representations[0].setViewMatrix(
-      Array.from(model.camera.getViewMatrix())
+      Array.from(model._camera.getViewMatrix())
     );
     model.representations[1].setViewMatrix(
-      Array.from(model.camera.getViewMatrix())
+      Array.from(model._camera.getViewMatrix())
     );
   };
 
@@ -178,7 +181,7 @@ export default function widgetBehavior(publicAPI, model) {
       visibility && handle.getShape() !== ShapeType.NONE,
     ]);
     model.representations[handleIndex].updateActorVisibility();
-    model.interactor.render();
+    model._interactor.render();
   };
 
   /**
@@ -263,7 +266,7 @@ export default function widgetBehavior(publicAPI, model) {
     ) {
       const worldCoords = model.manipulator.handleEvent(
         callData,
-        model.apiSpecificRenderWindow
+        model._apiSpecificRenderWindow
       );
       const translation = model.previousPosition
         ? vtkMath.subtract(worldCoords, model.previousPosition, [])
@@ -318,15 +321,15 @@ export default function widgetBehavior(publicAPI, model) {
       model.activeState = null;
 
       if (!wasTextActive) {
-        model.interactor.cancelAnimation(publicAPI);
+        model._interactor.cancelAnimation(publicAPI);
       }
-      model.apiSpecificRenderWindow.setCursor('pointer');
+      model._apiSpecificRenderWindow.setCursor('pointer');
 
       model.hasFocus = false;
 
       publicAPI.invokeEndInteractionEvent();
-      model.widgetManager.enablePicking();
-      model.interactor.render();
+      model._widgetManager.enablePicking();
+      model._interactor.render();
     }
 
     if (
@@ -348,7 +351,7 @@ export default function widgetBehavior(publicAPI, model) {
       model.activeState.setShape(publicAPI.getHandle(0).getShape());
       publicAPI.setMoveHandleVisibility(true);
       model.activeState.activate();
-      model.interactor.requestAnimation(publicAPI);
+      model._interactor.requestAnimation(publicAPI);
       publicAPI.invokeStartInteractionEvent();
     }
     model.hasFocus = true;
@@ -358,14 +361,14 @@ export default function widgetBehavior(publicAPI, model) {
 
   publicAPI.loseFocus = () => {
     if (model.hasFocus) {
-      model.interactor.cancelAnimation(publicAPI);
+      model._interactor.cancelAnimation(publicAPI);
       publicAPI.invokeEndInteractionEvent();
     }
     model.widgetState.deactivate();
     model.widgetState.getMoveHandle().deactivate();
     model.activeState = null;
     model.hasFocus = false;
-    model.widgetManager.enablePicking();
-    model.interactor.render();
+    model._widgetManager.enablePicking();
+    model._interactor.render();
   };
 }

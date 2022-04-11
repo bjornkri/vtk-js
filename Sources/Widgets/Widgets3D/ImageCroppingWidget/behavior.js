@@ -22,7 +22,7 @@ export default function widgetBehavior(publicAPI, model) {
       return macro.VOID;
     }
     isDragging = true;
-    model.interactor.requestAnimation(publicAPI);
+    model._interactor.requestAnimation(publicAPI);
     return macro.EVENT_ABORT;
   };
 
@@ -36,7 +36,7 @@ export default function widgetBehavior(publicAPI, model) {
   publicAPI.handleLeftButtonRelease = () => {
     if (isDragging && model.pickable) {
       isDragging = false;
-      model.interactor.cancelAnimation(publicAPI);
+      model._interactor.cancelAnimation(publicAPI);
       model.widgetState.deactivate();
     }
   };
@@ -55,10 +55,10 @@ export default function widgetBehavior(publicAPI, model) {
 
         if (type === 'corners') {
           // manipulator should be a plane manipulator
-          manipulator.setNormal(model.camera.getDirectionOfProjection());
+          manipulator.setNormal(model._camera.getDirectionOfProjection());
           worldCoords = manipulator.handleEvent(
             callData,
-            model.apiSpecificRenderWindow
+            model._apiSpecificRenderWindow
           );
         }
 
@@ -80,7 +80,7 @@ export default function widgetBehavior(publicAPI, model) {
           manipulator.setNormal(rotateVec3(constraintAxis, indexToWorldT));
           worldCoords = manipulator.handleEvent(
             callData,
-            model.apiSpecificRenderWindow
+            model._apiSpecificRenderWindow
           );
         }
 
@@ -91,7 +91,7 @@ export default function widgetBehavior(publicAPI, model) {
           manipulator.setNormal(rotateVec3(edgeAxis, indexToWorldT));
           worldCoords = manipulator.handleEvent(
             callData,
-            model.apiSpecificRenderWindow
+            model._apiSpecificRenderWindow
           );
         }
 
@@ -122,7 +122,7 @@ export default function widgetBehavior(publicAPI, model) {
   // initialization
   // --------------------------------------------------------------------------
 
-  model.camera = model.renderer.getActiveCamera();
+  model._camera = model._renderer.getActiveCamera();
 
   model.classHierarchy.push('vtkImageCroppingWidgetProp');
 }
