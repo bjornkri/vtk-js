@@ -39,9 +39,10 @@ export interface IScalarBarActorInitialValues extends IActorInitialValues {
 	axisTextStyle?: IStyle,
 	tickLabelPixelOffset?: number,
 	tickTextStyle?: IStyle,
-	drawNanAnnotation?: boolean,
+	generateTicks?: (helper: any) => void,
 	drawBelowRangeSwatch?: boolean,
 	drawAboveRangeSwatch?: boolean,
+	drawNanAnnotation?: boolean,
 }
 
 export interface vtkScalarBarActor extends vtkActor {
@@ -90,6 +91,11 @@ export interface vtkScalarBarActor extends vtkActor {
 	/**
 	 * 
 	 */
+	getGenerateTicks(): any;
+
+	/**
+	 * 
+	 */
 	getAutomated(): boolean;
 
 	/**
@@ -116,7 +122,6 @@ export interface vtkScalarBarActor extends vtkActor {
 	 * 
 	 */
 	getBoxPositionByReference(): Vector2;
-
 
 	/**
 	 * 
@@ -174,6 +179,24 @@ export interface vtkScalarBarActor extends vtkActor {
 	 * @param autoLayout 
 	 */
 	setAutoLayout(autoLayout: any): boolean;
+
+	/**
+	 * Sets the function used to generate legend ticks. 
+	 * 
+	 * This function takes a vtkScalarBarActorHelper and returns true on success. 
+	 * To have the desired effect, the function must call: `helper.setTicks(ticks: num[])` and `helper.setTickStrings(tickStrings: string[])`.
+	 * 
+	 * After setting the generateTicks function you must regenerate the vtkScalarBarActor for your changes to take effect. 
+	 * One way to do that is:
+	 * ```
+	 *  const mapper = scalarBarActor.getMapper()
+	 *  if (mapper) {
+	 *    mapper.getLookupTable().resetAnnotations()
+	 *  }
+	 * ```
+	 * @param generateTicks 
+	 */
+	setGenerateTicks(generateTicks: (helper: any) => void): boolean;
 
 	/**
 	 * 
@@ -257,7 +280,7 @@ export interface vtkScalarBarActor extends vtkActor {
 	 * Set whether the NaN annotation should be rendered or not.
 	 * @param {Boolean} drawNanAnnotation
 	 */
-	 setDrawNanAnnotation(drawNanAnnotation: boolean): boolean;
+	setDrawNanAnnotation(drawNanAnnotation: boolean): boolean;
 
 	/**
 	 * Set whether the Below range swatch should be rendered or not
@@ -338,7 +361,7 @@ export function newInstance(initialValues?: IScalarBarActorInitialValues): vtkSc
  * (i.e., in the renderer's viewport) on top of the 3D graphics window.
  */
 export declare const vtkScalarBarActor: {
-	newInstance: typeof newInstance,
-	extend: typeof extend,
+	newInstance: typeof newInstance;
+	extend: typeof extend;
 };
 export default vtkScalarBarActor;
