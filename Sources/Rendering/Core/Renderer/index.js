@@ -181,9 +181,12 @@ function vtkRenderer(publicAPI, model) {
     publicAPI.modified();
   };
 
+  publicAPI.hasLight = (light) => model.lights.includes(light);
   publicAPI.addLight = (light) => {
-    model.lights = [].concat(model.lights, light);
-    publicAPI.modified();
+    if (light && !publicAPI.hasLight(light)) {
+      model.lights.push(light);
+      publicAPI.modified();
+    }
   };
   publicAPI.removeLight = (light) => {
     model.lights = model.lights.filter((l) => l !== light);
@@ -617,6 +620,11 @@ const DEFAULT_VALUES = {
   texturedBackground: false,
   backgroundTexture: null,
 
+  environmentTexture: null,
+  environmentTextureDiffuseStrength: 1,
+  environmentTextureSpecularStrength: 1,
+  useEnvironmentTextureAsBackground: false,
+
   pass: 0,
 };
 
@@ -665,6 +673,10 @@ export function extend(publicAPI, model, initialValues = {}) {
     'delegate',
     'backgroundTexture',
     'texturedBackground',
+    'environmentTexture',
+    'environmentTextureDiffuseStrength',
+    'environmentTextureSpecularStrength',
+    'useEnvironmentTextureAsBackground',
     'useShadows',
     'pass',
   ]);

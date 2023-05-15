@@ -1,6 +1,6 @@
 import { vtkObject } from "../../../interfaces";
 import { vtkOpenGLRenderWindow } from "../../../Rendering/OpenGL/RenderWindow"
-import { Vector3 } from "../../../types";
+import { Matrix3x3, Nullable, Vector3 } from "../../../types";
 
 /**
  *
@@ -53,12 +53,12 @@ export interface vtkAbstractManipulator extends vtkObject {
      * @param callData 
      * @param glRenderWindow 
      */
-    handleEvent(callData: any, glRenderWindow: vtkOpenGLRenderWindow): Vector3;
+    handleEvent(callData: any, glRenderWindow: vtkOpenGLRenderWindow): { worldCoords: Nullable<Vector3>, worldDirection?: Matrix3x3 };
 
     /* ------------------------------------------------------------------- */
 
     /**
-     * Set the user normal. 
+     * Set the user normal.
      * This normal take precedence on the handleNormal and the widgetNormal.
      * This normal should not be set within the widget internal code.
      * @param {Vector3} normal The normal coordinate.

@@ -2,6 +2,7 @@
  * macros.js is the old macro.js.
  * The name change is so we do not get eaten by babel-plugin-macros.
  */
+import DeepEqual from 'fast-deep-equal';
 import vtk, { vtkGlobal } from './vtk';
 import ClassHierarchy from './Common/Core/ClassHierarchy';
 
@@ -96,8 +97,13 @@ TYPED_ARRAYS.Int16Array = Int16Array;
 TYPED_ARRAYS.Uint32Array = Uint32Array;
 TYPED_ARRAYS.Int32Array = Int32Array;
 TYPED_ARRAYS.Uint8ClampedArray = Uint8ClampedArray;
-// TYPED_ARRAYS.BigInt64Array = BigInt64Array;
-// TYPED_ARRAYS.BigUint64Array = BigUint64Array;
+
+try {
+  TYPED_ARRAYS.BigInt64Array = BigInt64Array;
+  TYPED_ARRAYS.BigUint64Array = BigUint64Array;
+} catch {
+  // ignore
+}
 
 export function newTypedArray(type, ...args) {
   return new (TYPED_ARRAYS[type] || Float64Array)(...args);
@@ -245,7 +251,11 @@ export function obj(publicAPI = {}, model = {}) {
   if (!('classHierarchy' in model)) {
     model.classHierarchy = new ClassHierarchy('vtkObject');
   } else if (!(model.classHierarchy instanceof ClassHierarchy)) {
-    model.classHierarchy = ClassHierarchy.from(model.classHierarchy);
+    const hierarchy = new ClassHierarchy();
+    for (let i = 0; i < model.classHierarchy.length; i++) {
+      hierarchy.push(model.classHierarchy[i]);
+    }
+    model.classHierarchy = hierarchy;
   }
 
   function off(index) {
@@ -431,10 +441,27 @@ export function obj(publicAPI = {}, model = {}) {
 // getXXX: add getters
 // ----------------------------------------------------------------------------
 
+const objectGetterMap = {
+  object(publicAPI, model, field) {
+    return function getter() {
+      return { ...model[field.name] };
+    };
+  },
+};
+
 export function get(publicAPI, model, fieldNames) {
   fieldNames.forEach((field) => {
     if (typeof field === 'object') {
-      publicAPI[`get${_capitalize(field.name)}`] = () => model[field.name];
+      const getter = objectGetterMap[field.type];
+      if (getter) {
+        publicAPI[`get${_capitalize(field.name)}`] = getter(
+          publicAPI,
+          model,
+          field
+        );
+      } else {
+        publicAPI[`get${_capitalize(field.name)}`] = () => model[field.name];
+      }
     } else {
       publicAPI[`get${_capitalize(field)}`] = () => model[field];
     }
@@ -447,6 +474,7 @@ export function get(publicAPI, model, fieldNames) {
 
 const objectSetterMap = {
   enum(publicAPI, model, field) {
+    const onChanged = `_on${_capitalize(field.name)}Changed`;
     return (value) => {
       if (typeof value === 'string') {
         if (field.enum[value] !== undefined) {
@@ -467,7 +495,9 @@ const objectSetterMap = {
               .map((key) => field.enum[key])
               .indexOf(value) !== -1
           ) {
+            const previousValue = model[field.name];
             model[field.name] = value;
+            model[onChanged]?.(publicAPI, model, value, previousValue);
             publicAPI.modified();
             return true;
           }
@@ -480,6 +510,19 @@ const objectSetterMap = {
         `Set Enum with invalid argument (String/Number) ${field}, ${value}`
       );
       throw new TypeError('Set Enum with invalid argument (String/Number)');
+    };
+  },
+  object(publicAPI, model, field) {
+    const onChanged = `_on${_capitalize(field.name)}Changed`;
+    return (value) => {
+      if (!DeepEqual(model[field.name], value)) {
+        const previousValue = model[field.name];
+        model[field.name] = value;
+        model[onChanged]?.(publicAPI, model, value, previousValue);
+        publicAPI.modified();
+        return true;
+      }
+      return false;
     };
   },
 };
@@ -495,6 +538,7 @@ function findSetter(field) {
     throw new TypeError('No setter for field');
   }
   return function getSetter(publicAPI, model) {
+    const onChanged = `_on${_capitalize(field)}Changed`;
     return function setter(value) {
       if (model.deleted) {
         vtkErrorMacro('instance deleted - cannot call any method');
@@ -502,7 +546,9 @@ function findSetter(field) {
       }
 
       if (model[field] !== value) {
+        const previousValue = model[field.name];
         model[field] = value;
+        model[onChanged]?.(publicAPI, model, value, previousValue);
         publicAPI.modified();
         return true;
       }
@@ -544,7 +590,7 @@ export function setGet(publicAPI, model, fieldNames) {
 export function getArray(publicAPI, model, fieldNames) {
   fieldNames.forEach((field) => {
     publicAPI[`get${_capitalize(field)}`] = () =>
-      model[field] ? [].concat(model[field]) : model[field];
+      model[field] ? Array.from(model[field]) : model[field];
     publicAPI[`get${_capitalize(field)}ByReference`] = () => model[field];
   });
 }
@@ -568,6 +614,7 @@ export function setArray(
         `Invalid initial number of values for array (${field})`
       );
     }
+    const onChanged = `_on${_capitalize(field)}Changed`;
 
     publicAPI[`set${_capitalize(field)}`] = (...args) => {
       if (model.deleted) {
@@ -600,16 +647,19 @@ export function setArray(
           }
         }
         changeDetected =
-          model[field] == null ||
-          model[field].some((item, index) => item !== array[index]) ||
-          model[field].length !== array.length;
+          model[field] == null || model[field].length !== array.length;
+        for (let i = 0; !changeDetected && i < array.length; ++i) {
+          changeDetected = model[field][i] !== array[i];
+        }
         if (changeDetected && needCopy) {
           array = Array.from(array);
         }
       }
 
       if (changeDetected) {
+        const previousValue = model[field.name];
         model[field] = array;
+        model[onChanged]?.(publicAPI, model, array, previousValue);
         publicAPI.modified();
       }
       return changeDetected;

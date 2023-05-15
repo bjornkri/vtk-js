@@ -4,7 +4,7 @@ import { vec3 } from 'gl-matrix';
 export default function widgetBehavior(publicAPI, model) {
   model.painting = model._factory.getPainting();
 
-  publicAPI.handleLeftButtonPress = (callData) => {
+  publicAPI.handleLeftButtonPress = () => {
     if (!model.activeState || !model.activeState.getActive()) {
       return macro.VOID;
     }
@@ -41,7 +41,7 @@ export default function widgetBehavior(publicAPI, model) {
       model.activeState.setRight(...right);
       model.activeState.setDirection(...normal);
 
-      const worldCoords = manipulator.handleEvent(
+      const { worldCoords } = manipulator.handleEvent(
         callData,
         model._apiSpecificRenderWindow
       );

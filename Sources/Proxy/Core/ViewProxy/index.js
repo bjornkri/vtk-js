@@ -37,14 +37,19 @@ function vtkViewProxy(publicAPI, model) {
   model.renderer = vtkRenderer.newInstance({ background: [0, 0, 0] });
   model.renderWindow.addRenderer(model.renderer);
 
-  model.openglRenderWindow = model.renderWindow.newAPISpecificView();
-  model.renderWindow.addView(model.openglRenderWindow);
+  model._openGLRenderWindow = model.renderWindow.newAPISpecificView();
+  model.renderWindow.addView(model._openGLRenderWindow);
 
   model.interactor = vtkRenderWindowInteractor.newInstance();
-  model.interactor.setView(model.openglRenderWindow);
+  model.interactor.setView(model._openGLRenderWindow);
 
   model.interactorStyle3D = vtkInteractorStyleManipulator.newInstance();
   model.interactorStyle2D = vtkInteractorStyleManipulator.newInstance();
+
+  /**
+   * Internal function used by publicAPI.resetCamera()
+   */
+  model._resetCamera = (bounds = null) => model.renderer.resetCamera(bounds);
 
   // Apply default interaction styles
   InteractionPresets.applyPreset('3D', model.interactorStyle3D);
@@ -171,14 +176,14 @@ function vtkViewProxy(publicAPI, model) {
     if (model.container) {
       model.orientationWidget.setEnabled(false);
       model.interactor.unbindEvents(model.container);
-      model.openglRenderWindow.setContainer(null);
+      model._openGLRenderWindow.setContainer(null);
       model.cornerAnnotation.setContainer(null);
     }
 
     model.container = container;
 
     if (container) {
-      model.openglRenderWindow.setContainer(container);
+      model._openGLRenderWindow.setContainer(container);
       model.cornerAnnotation.setContainer(container);
       model.interactor.initialize();
       model.interactor.bindEvents(container);
@@ -197,7 +202,7 @@ function vtkViewProxy(publicAPI, model) {
       const devicePixelRatio = window.devicePixelRatio || 1;
       const width = Math.max(10, Math.floor(devicePixelRatio * dims.width));
       const height = Math.max(10, Math.floor(devicePixelRatio * dims.height));
-      model.openglRenderWindow.setSize(width, height);
+      model._openGLRenderWindow.setSize(width, height);
       publicAPI.invokeResize({ width, height });
       publicAPI.renderLater();
     }
@@ -257,9 +262,36 @@ function vtkViewProxy(publicAPI, model) {
 
   // --------------------------------------------------------------------------
 
+  publicAPI.setCameraParameters = ({
+    position,
+    focalPoint,
+    bounds,
+    parallelScale,
+    viewAngle,
+  }) => {
+    if (position != null) {
+      model.camera.setPosition(...position);
+    }
+    if (focalPoint != null) {
+      model.camera.setFocalPoint(...focalPoint);
+    }
+    if (bounds != null) {
+      model.renderer.resetCameraClippingRange(bounds);
+    } else {
+      model.renderer.resetCameraClippingRange();
+    }
+    if (parallelScale != null) {
+      model.camera.setParallelScale(parallelScale);
+    }
+    if (viewAngle != null) {
+      model.camera.setViewAngle(viewAngle);
+    }
+  };
+
+  // --------------------------------------------------------------------------
+
   publicAPI.resetCamera = () => {
-    model.renderer.resetCamera();
-    model.renderer.resetCameraClippingRange();
+    model._resetCamera();
     model.interactorStyle2D.setCenterOfRotation(model.camera.getFocalPoint());
     model.interactorStyle3D.setCenterOfRotation(model.camera.getFocalPoint());
     publicAPI.renderLater();
@@ -593,7 +625,7 @@ function vtkViewProxy(publicAPI, model) {
     // in reverse order
     model.interactor.delete();
     model.renderer.delete();
-    model.openglRenderWindow.delete();
+    model._openGLRenderWindow.delete();
     model.renderWindow.delete();
   }, publicAPI.delete);
 
@@ -637,7 +669,7 @@ function extend(publicAPI, model, initialValues = {}) {
     'interactor',
     'interactorStyle2D',
     'interactorStyle3D',
-    'openglRenderWindow', // todo breaking? convert to apiSpecificWindow
+    '_openGLRenderWindow', // todo breaking? convert to apiSpecificWindow
     'orientationAxesType',
     'presetToOrientationAxes',
     'renderer',
@@ -645,6 +677,7 @@ function extend(publicAPI, model, initialValues = {}) {
     'representations',
     'useParallelRendering',
   ]);
+  macro.moveToProtected(publicAPI, model, ['openGLRenderWindow']);
   macro.event(publicAPI, model, 'Resize');
 
   // Object specific methods

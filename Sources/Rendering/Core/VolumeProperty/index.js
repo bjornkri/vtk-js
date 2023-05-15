@@ -246,13 +246,14 @@ function vtkVolumeProperty(publicAPI, model) {
 const DEFAULT_VALUES = {
   independentComponents: true,
   interpolationType: InterpolationType.FAST_LINEAR,
-  shade: 0,
+  shade: false,
   ambient: 0.1,
   diffuse: 0.7,
   specular: 0.2,
   specularPower: 10.0,
   useLabelOutline: false,
   labelOutlineThickness: 1,
+  labelOutlineOpacity: 1.0,
 };
 
 // ----------------------------------------------------------------------------
@@ -295,6 +296,7 @@ export function extend(publicAPI, model, initialValues = {}) {
     'specularPower',
     'useLabelOutline',
     'labelOutlineThickness',
+    'labelOutlineOpacity',
   ]);
 
   // Object methods

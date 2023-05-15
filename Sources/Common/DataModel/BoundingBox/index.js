@@ -1,4 +1,5 @@
 import * as vtkMath from 'vtk.js/Sources/Common/Core/Math';
+import { vec3 } from 'gl-matrix';
 import vtkPlane from 'vtk.js/Sources/Common/DataModel/Plane';
 
 const INIT_BOUNDS = [
@@ -27,7 +28,10 @@ export function equals(a, b) {
 
 export function isValid(bounds) {
   return (
-    bounds[0] <= bounds[1] && bounds[2] <= bounds[3] && bounds[4] <= bounds[5]
+    bounds?.length >= 6 &&
+    bounds[0] <= bounds[1] &&
+    bounds[2] <= bounds[3] &&
+    bounds[4] <= bounds[5]
   );
 }
 
@@ -45,14 +49,30 @@ export function reset(bounds) {
   return setBounds(bounds, INIT_BOUNDS);
 }
 
-export function addPoint(bounds, ...xyz) {
+export function addPoint(bounds, x, y, z) {
   const [xMin, xMax, yMin, yMax, zMin, zMax] = bounds;
-  bounds[0] = xMin < xyz[0] ? xMin : xyz[0];
-  bounds[1] = xMax > xyz[0] ? xMax : xyz[0];
-  bounds[2] = yMin < xyz[1] ? yMin : xyz[1];
-  bounds[3] = yMax > xyz[1] ? yMax : xyz[1];
-  bounds[4] = zMin < xyz[2] ? zMin : xyz[2];
-  bounds[5] = zMax > xyz[2] ? zMax : xyz[2];
+  bounds[0] = xMin < x ? xMin : x;
+  bounds[1] = xMax > x ? xMax : x;
+  bounds[2] = yMin < y ? yMin : y;
+  bounds[3] = yMax > y ? yMax : y;
+  bounds[4] = zMin < z ? zMin : z;
+  bounds[5] = zMax > z ? zMax : z;
+  return bounds;
+}
+
+export function addPoints(bounds, points) {
+  if (points.length === 0) {
+    return bounds;
+  }
+  if (Array.isArray(points[0])) {
+    for (let i = 0; i < points.length; ++i) {
+      addPoint(bounds, ...points[i]);
+    }
+  } else {
+    for (let i = 0; i < points.length; i += 3) {
+      addPoint(bounds, ...points.slice(i, i + 3));
+    }
+  }
   return bounds;
 }
 
@@ -231,8 +251,7 @@ export function getCorners(bounds, corners) {
   for (let ix = 0; ix < 2; ix++) {
     for (let iy = 2; iy < 4; iy++) {
       for (let iz = 4; iz < 6; iz++) {
-        corners[count] = [bounds[ix], bounds[iy], bounds[iz]];
-        count++;
+        corners[count++] = [bounds[ix], bounds[iy], bounds[iz]];
       }
     }
   }
@@ -249,6 +268,15 @@ export function computeCornerPoints(bounds, point1, point2) {
   point2[1] = bounds[3];
   point2[2] = bounds[5];
   return point1;
+}
+
+export function transformBounds(bounds, transform, out = []) {
+  const corners = getCorners(bounds, []);
+  for (let i = 0; i < corners.length; ++i) {
+    vec3.transformMat4(corners[i], corners[i], transform);
+  }
+  reset(out);
+  return addPoints(out, corners);
 }
 
 export function computeScale3(bounds, scale3 = []) {
@@ -621,7 +649,11 @@ class BoundingBox {
   }
 
   addPoint(...xyz) {
-    return addPoint(this.bounds, xyz);
+    return addPoint(this.bounds, ...xyz);
+  }
+
+  addPoints(points) {
+    return addPoints(this.bounds, points);
   }
 
   addBounds(xMin, xMax, yMin, yMax, zMin, zMax) {
@@ -696,6 +728,10 @@ class BoundingBox {
     return computeLocalBounds(this.bounds, u, v, w);
   }
 
+  transformBounds(transform, out = []) {
+    return transformBounds(this.bounds, transform, out);
+  }
+
   computeScale3(scale3) {
     return computeScale3(this.bounds, scale3);
   }
@@ -744,6 +780,7 @@ export const STATIC = {
   setBounds,
   reset,
   addPoint,
+  addPoints,
   addBounds,
   setMinPoint,
   setMaxPoint,
@@ -763,6 +800,7 @@ export const STATIC = {
   getCorners,
   computeCornerPoints,
   computeLocalBounds,
+  transformBounds,
   computeScale3,
   cutWithPlane,
   intersectBox,

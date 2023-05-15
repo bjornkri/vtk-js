@@ -8,8 +8,14 @@ import vtkOpenGLTextureUnitManager from 'vtk.js/Sources/Rendering/OpenGL/Texture
 import vtkOpenGLViewNodeFactory from 'vtk.js/Sources/Rendering/OpenGL/ViewNodeFactory';
 import vtkRenderPass from 'vtk.js/Sources/Rendering/SceneGraph/RenderPass';
 import vtkRenderWindowViewNode from 'vtk.js/Sources/Rendering/SceneGraph/RenderWindowViewNode';
+import Constants from 'vtk.js/Sources/Rendering/OpenGL/RenderWindow/Constants';
+import {
+  createContextProxyHandler,
+  GET_UNDERLYING_CONTEXT,
+} from 'vtk.js/Sources/Rendering/OpenGL/RenderWindow/ContextProxy';
 
 const { vtkDebugMacro, vtkErrorMacro } = macro;
+const { XrSessionTypes } = Constants;
 
 const SCREENSHOT_PLACEHOLDER = {
   position: 'absolute',
@@ -20,14 +26,8 @@ const SCREENSHOT_PLACEHOLDER = {
 };
 
 const DEFAULT_RESET_FACTORS = {
-  vr: {
-    rescaleFactor: 1.0,
-    translateZ: -0.7, // 0.7 m forward from the camera
-  },
-  ar: {
-    rescaleFactor: 0.25, // scale down AR for viewing comfort by default
-    translateZ: -0.5, // 0.5 m forward from the camera
-  },
+  rescaleFactor: 0.25, // isotropic scale factor reduces apparent size of objects
+  translateZ: -1.5, // default translation initializes object in front of camera
 };
 
 function checkRenderTargetSupport(gl, format, type) {
@@ -82,6 +82,10 @@ export function popMonitorGLContextCount(cb) {
   return GL_CONTEXT_LISTENERS.pop();
 }
 
+function _preventDefault(e) {
+  e.preventDefault();
+}
+
 // ----------------------------------------------------------------------------
 // vtkOpenGLRenderWindow methods
 // ----------------------------------------------------------------------------
@@ -90,16 +94,12 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
   // Set our className
   model.classHierarchy.push('vtkOpenGLRenderWindow');
 
+  const cachingContextHandler = createContextProxyHandler();
+
   publicAPI.getViewNodeFactory = () => model.myFactory;
 
   // prevent default context lost handler
-  model.canvas.addEventListener(
-    'webglcontextlost',
-    (event) => {
-      event.preventDefault();
-    },
-    false
-  );
+  model.canvas.addEventListener('webglcontextlost', _preventDefault, false);
 
   model.canvas.addEventListener(
     'webglcontextrestored',
@@ -284,20 +284,25 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
         model.canvas.getContext('experimental-webgl', options);
     }
 
-    return result;
+    return new Proxy(result, cachingContextHandler);
   };
 
   // Request an XR session on the user device with WebXR,
   // typically in response to a user request such as a button press
-  publicAPI.startXR = (isAR) => {
+  publicAPI.startXR = (xrSessionType) => {
     if (navigator.xr === undefined) {
       throw new Error('WebXR is not available');
     }
 
-    model.xrSessionIsAR = isAR;
-    const sessionType = isAR ? 'immersive-ar' : 'immersive-vr';
+    model.xrSessionType =
+      xrSessionType !== undefined ? xrSessionType : XrSessionTypes.HmdVR;
+    const isXrSessionAR = [
+      XrSessionTypes.HmdAR,
+      XrSessionTypes.MobileAR,
+    ].includes(model.xrSessionType);
+    const sessionType = isXrSessionAR ? 'immersive-ar' : 'immersive-vr';
     if (!navigator.xr.isSessionSupported(sessionType)) {
-      if (isAR) {
+      if (isXrSessionAR) {
         throw new Error('Device does not support AR session');
       } else {
         throw new Error('VR display is not available');
@@ -322,7 +327,11 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
       const gl = publicAPI.get3DContext();
       await gl.makeXRCompatible();
 
-      const glLayer = new global.XRWebGLLayer(model.xrSession, gl);
+      const glLayer = new global.XRWebGLLayer(
+        model.xrSession,
+        // constructor needs unproxied context
+        gl[GET_UNDERLYING_CONTEXT]()
+      );
       publicAPI.setSize(glLayer.framebufferWidth, glLayer.framebufferHeight);
 
       model.xrSession.updateRenderState({
@@ -333,6 +342,17 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
         model.xrReferenceSpace = refSpace;
       });
 
+      // Initialize transparent background for augmented reality session
+      const isXrSessionAR = [
+        XrSessionTypes.HmdAR,
+        XrSessionTypes.MobileAR,
+      ].includes(model.xrSessionType);
+      if (isXrSessionAR) {
+        const ren = model.renderable.getRenderers()[0];
+        model.preXrSessionBackground = ren.getBackground();
+        ren.setBackground([0, 0, 0, 0]);
+      }
+
       publicAPI.resetXRScene();
 
       model.renderable.getInteractor().switchToXRAnimation();
@@ -340,34 +360,15 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
         publicAPI.xrRender
       );
     } else {
-      throw new Error('Failed to enter VR with a null xrSession.');
+      throw new Error('Failed to enter XR with a null xrSession.');
     }
   };
 
   publicAPI.resetXRScene = (
-    inputRescaleFactor = DEFAULT_RESET_FACTORS.vr.rescaleFactor,
-    inputTranslateZ = DEFAULT_RESET_FACTORS.vr.translateZ
+    rescaleFactor = DEFAULT_RESET_FACTORS.rescaleFactor,
+    translateZ = DEFAULT_RESET_FACTORS.translateZ
   ) => {
     // Adjust world-to-physical parameters for different modalities
-    // Default parameter values are for VR (model.xrSessionIsAR == false)
-    let rescaleFactor = inputRescaleFactor;
-    let translateZ = inputTranslateZ;
-
-    if (
-      model.xrSessionIsAR &&
-      rescaleFactor === DEFAULT_RESET_FACTORS.vr.rescaleFactor
-    ) {
-      // Scale down by default in AR
-      rescaleFactor = DEFAULT_RESET_FACTORS.ar.rescaleFactor;
-    }
-
-    if (
-      model.xrSessionIsAR &&
-      translateZ === DEFAULT_RESET_FACTORS.vr.translateZ
-    ) {
-      // Default closer to the camera in AR
-      translateZ = DEFAULT_RESET_FACTORS.ar.translateZ;
-    }
 
     const ren = model.renderable.getRenderers()[0];
     ren.resetCamera();
@@ -376,9 +377,9 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
     let physicalScale = camera.getPhysicalScale();
     const physicalTranslation = camera.getPhysicalTranslation();
 
+    const rescaledTranslateZ = translateZ * physicalScale;
     physicalScale /= rescaleFactor;
-    translateZ *= physicalScale;
-    physicalTranslation[2] += translateZ;
+    physicalTranslation[2] += rescaledTranslateZ;
 
     camera.setPhysicalScale(physicalScale);
     camera.setPhysicalTranslation(physicalTranslation);
@@ -412,6 +413,12 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
 
     // Reset to default canvas
     const ren = model.renderable.getRenderers()[0];
+
+    if (model.preXrSessionBackground != null) {
+      ren.setBackground(model.preXrSessionBackground);
+      model.preXrSessionBackground = null;
+    }
+
     ren.getActiveCamera().setProjectionMatrix(null);
     ren.resetCamera();
 
@@ -421,6 +428,10 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
 
   publicAPI.xrRender = async (t, frame) => {
     const xrSession = frame.session;
+    const isXrSessionHMD = [
+      XrSessionTypes.HmdVR,
+      XrSessionTypes.HmdAR,
+    ].includes(model.xrSessionType);
 
     model.renderable
       .getInteractor()
@@ -435,7 +446,10 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
     if (xrPose) {
       const gl = publicAPI.get3DContext();
 
-      if (model.xrSessionIsAR && model.oldCanvasSize !== undefined) {
+      if (
+        model.xrSessionType === XrSessionTypes.MobileAR &&
+        model.oldCanvasSize !== undefined
+      ) {
         gl.canvas.width = model.oldCanvasSize[0];
         gl.canvas.height = model.oldCanvasSize[1];
       }
@@ -444,19 +458,16 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
       gl.bindFramebuffer(gl.FRAMEBUFFER, glLayer.framebuffer);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.clear(gl.DEPTH_BUFFER_BIT);
+      publicAPI.setSize(glLayer.framebufferWidth, glLayer.framebufferHeight);
 
       // get the first renderer
       const ren = model.renderable.getRenderers()[0];
 
       // Do a render pass for each eye
-      xrPose.views.forEach((view) => {
+      xrPose.views.forEach((view, index) => {
         const viewport = glLayer.getViewport(view);
 
-        gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
-
-        // TODO: Appropriate handling for AR passthrough on HMDs
-        // with two eyes will require further investigation.
-        if (!model.xrSessionIsAR) {
+        if (isXrSessionHMD) {
           if (view.eye === 'left') {
             ren.setViewport(0, 0, 0.5, 1.0);
           } else if (view.eye === 'right') {
@@ -465,6 +476,15 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
             // No handling for non-eye viewport
             return;
           }
+        } else if (model.xrSessionType === XrSessionTypes.LookingGlassVR) {
+          const startX = viewport.x / glLayer.framebufferWidth;
+          const startY = viewport.y / glLayer.framebufferHeight;
+          const endX = (viewport.x + viewport.width) / glLayer.framebufferWidth;
+          const endY =
+            (viewport.y + viewport.height) / glLayer.framebufferHeight;
+          ren.setViewport(startX, startY, endX, endY);
+        } else {
+          ren.setViewport(0, 0, 1, 1);
         }
 
         ren
@@ -476,6 +496,11 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
 
         publicAPI.traverseAllPasses();
       });
+
+      // Reset scissorbox before any subsequent rendering to external displays
+      // on frame end, such as rendering to a Looking Glass display.
+      gl.scissor(0, 0, glLayer.framebufferWidth, glLayer.framebufferHeight);
+      gl.disable(gl.SCISSOR_TEST);
     }
   };
 
@@ -510,7 +535,7 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
     const result = model._textureResourceIds.get(texture);
     if (result !== undefined) {
       publicAPI.getTextureUnitManager().free(result);
-      delete model._textureResourceIds.delete(texture);
+      model._textureResourceIds.delete(texture);
     }
   };
 
@@ -522,7 +547,12 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
     return -1;
   };
 
-  publicAPI.getDefaultTextureInternalFormat = (vtktype, numComps, useFloat) => {
+  publicAPI.getDefaultTextureInternalFormat = (
+    vtktype,
+    numComps,
+    oglNorm16Ext = null,
+    useHalfFloat = false
+  ) => {
     if (model.webgl2) {
       switch (vtktype) {
         case VtkDataTypes.UNSIGNED_CHAR:
@@ -536,6 +566,31 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
             case 4:
             default:
               return model.context.RGBA8;
+          }
+        case oglNorm16Ext && !useHalfFloat && VtkDataTypes.UNSIGNED_SHORT:
+          switch (numComps) {
+            case 1:
+              return oglNorm16Ext.R16_EXT;
+            case 2:
+              return oglNorm16Ext.RG16_EXT;
+            case 3:
+              return oglNorm16Ext.RGB16_EXT;
+            case 4:
+            default:
+              return oglNorm16Ext.RGBA16_EXT;
+          }
+        // prioritize norm16 over float
+        case oglNorm16Ext && !useHalfFloat && VtkDataTypes.SHORT:
+          switch (numComps) {
+            case 1:
+              return oglNorm16Ext.R16_SNORM_EXT;
+            case 2:
+              return oglNorm16Ext.RG16_SNORM_EXT;
+            case 3:
+              return oglNorm16Ext.RGB16_SNORM_EXT;
+            case 4:
+            default:
+              return oglNorm16Ext.RGBA16_SNORM_EXT;
           }
         case VtkDataTypes.FLOAT:
         default:
@@ -1213,11 +1268,34 @@ function vtkOpenGLRenderWindow(publicAPI, model) {
     return ret;
   };
 
+  function clearEvents() {
+    model.canvas.removeEventListener('webglcontextlost', _preventDefault);
+    model.canvas.removeEventListener(
+      'webglcontextrestored',
+      publicAPI.restoreContext
+    );
+  }
+
   publicAPI.delete = macro.chain(
+    clearEvents,
     publicAPI.delete,
     publicAPI.setViewStream,
     deleteGLContext
   );
+
+  // Do not trigger modified for performance reasons
+  publicAPI.setActiveFramebuffer = (newActiveFramebuffer) => {
+    model.activeFramebuffer = newActiveFramebuffer;
+  };
+
+  const superSetSize = publicAPI.setSize;
+  publicAPI.setSize = (width, height) => {
+    const modified = superSetSize(width, height);
+    if (modified) {
+      publicAPI.invokeWindowResizeEvent({ width, height });
+    }
+    return modified;
+  };
 }
 
 // ----------------------------------------------------------------------------
@@ -1241,7 +1319,6 @@ const DEFAULT_VALUES = {
   defaultToWebgl2: true, // attempt webgl2 on by default
   activeFramebuffer: null,
   xrSession: null,
-  xrSessionIsAR: false,
   xrReferenceSpace: null,
   xrSupported: true,
   imageFormat: 'image/png',
@@ -1300,6 +1377,7 @@ export function extend(publicAPI, model, initialValues = {}) {
     'vrDisplay',
     'useBackgroundImage',
     'xrSupported',
+    'activeFramebuffer',
   ]);
 
   macro.setGet(publicAPI, model, [
@@ -1311,14 +1389,10 @@ export function extend(publicAPI, model, initialValues = {}) {
     'defaultToWebgl2',
     'cursor',
     'useOffScreen',
-    // might want to make this not call modified as
-    // we change the active framebuffer a lot. Or maybe
-    // only mark modified if the size or depth
-    // of the buffer has changed
-    'activeFramebuffer',
   ]);
 
   macro.setGetArray(publicAPI, model, ['size'], 2);
+  macro.event(publicAPI, model, 'windowResizeEvent');
 
   // Object methods
   vtkOpenGLRenderWindow(publicAPI, model);

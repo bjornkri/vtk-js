@@ -403,11 +403,24 @@ function vtkMapper(publicAPI, model) {
   };
 
   publicAPI.getIsOpaque = () => {
+    const input = publicAPI.getInputData();
+    const gasResult = publicAPI.getAbstractScalars(
+      input,
+      model.scalarMode,
+      model.arrayAccessMode,
+      model.arrayId,
+      model.colorByArrayName
+    );
+    const scalars = gasResult.scalars;
+    if (!model.scalarVisibility || scalars == null) {
+      // No scalar colors.
+      return true;
+    }
     const lut = publicAPI.getLookupTable();
     if (lut) {
       // Ensure that the lookup table is built
       lut.build();
-      return lut.isOpaque();
+      return lut.areScalarsOpaque(scalars, model.colorMode, -1);
     }
     return true;
   };
@@ -599,8 +612,6 @@ const DEFAULT_VALUES = {
   useInvertibleColors: false,
   invertibleScalars: null,
 
-  viewSpecificProperties: null,
-
   customShaderAttributes: [],
 };
 
@@ -631,14 +642,9 @@ export function extend(publicAPI, model, initialValues = {}) {
     'selectionWebGLIdsToVTKIds',
     'static',
     'useLookupTableScalarRange',
-    'viewSpecificProperties',
     'customShaderAttributes', // point data array names that will be transferred to the VBO
   ]);
   macro.setGetArray(publicAPI, model, ['scalarRange'], 2);
-
-  if (!model.viewSpecificProperties) {
-    model.viewSpecificProperties = {};
-  }
 
   CoincidentTopologyHelper.implementCoincidentTopologyMethods(publicAPI, model);
 

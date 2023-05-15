@@ -153,9 +153,8 @@ function vtkInteractorStyleTrackballCamera(publicAPI, model) {
   };
 
   //----------------------------------------------------------------------------
-  publicAPI.handleStartMouseWheel = (callData) => {
+  publicAPI.handleStartMouseWheel = () => {
     publicAPI.startDolly();
-    publicAPI.handleMouseWheel(callData);
   };
 
   //--------------------------------------------------------------------------
@@ -277,6 +276,10 @@ function vtkInteractorStyleTrackballCamera(publicAPI, model) {
 
   //--------------------------------------------------------------------------
   publicAPI.handleMouseRotate = (renderer, position) => {
+    if (!model.previousPosition) {
+      return;
+    }
+
     const rwi = model._interactor;
 
     const dx = position.x - model.previousPosition.x;
@@ -312,6 +315,10 @@ function vtkInteractorStyleTrackballCamera(publicAPI, model) {
 
   //--------------------------------------------------------------------------
   publicAPI.handleMouseSpin = (renderer, position) => {
+    if (!model.previousPosition) {
+      return;
+    }
+
     const rwi = model._interactor;
     const camera = renderer.getActiveCamera();
     const center = rwi.getView().getViewportCenter(renderer);
@@ -335,6 +342,10 @@ function vtkInteractorStyleTrackballCamera(publicAPI, model) {
 
   //--------------------------------------------------------------------------
   publicAPI.handleMousePan = (renderer, position) => {
+    if (!model.previousPosition) {
+      return;
+    }
+
     const camera = renderer.getActiveCamera();
 
     // Calculate the focal depth since we'll be using it a lot
@@ -390,6 +401,10 @@ function vtkInteractorStyleTrackballCamera(publicAPI, model) {
 
   //----------------------------------------------------------------------------
   publicAPI.handleMouseDolly = (renderer, position) => {
+    if (!model.previousPosition) {
+      return;
+    }
+
     const dy = position.y - model.previousPosition.y;
     const rwi = model._interactor;
     const center = rwi.getView().getViewportCenter(renderer);

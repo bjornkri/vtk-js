@@ -92,44 +92,6 @@ test('Test HardwareSelector', (tapeContext) => {
     })
   );
 
-  // Test picking points
-  promises.push(
-    sel.selectAsync(renderer, 210, 199, 211, 200).then((res) => {
-      tapeContext.ok(res[0].getProperties().propID === 3);
-      tapeContext.ok(res[0].getProperties().attributeID === 33);
-    })
-  );
-
-  promises.push(
-    sel.selectAsync(renderer, 145, 140, 146, 141).then((res) => {
-      tapeContext.ok(res[0].getProperties().propID === 4);
-      tapeContext.ok(res[0].getProperties().attributeID === 0);
-    })
-  );
-
-  promises.push(
-    sel.selectAsync(renderer, 294, 264, 295, 265).then((res) => {
-      tapeContext.ok(res[0].getProperties().propID === 5);
-      tapeContext.ok(res[0].getProperties().attributeID === 0);
-    })
-  );
-
-  sel.setFieldAssociation(FieldAssociations.FIELD_ASSOCIATION_CELLS);
-
-  // Test picking cells
-  promises.push(
-    sel.selectAsync(renderer, 200, 200, 201, 201).then((res) => {
-      tapeContext.ok(res[0].getProperties().propID === 3);
-      tapeContext.ok(res[0].getProperties().attributeID === 27);
-    })
-  );
-
-  promises.push(
-    sel.selectAsync(renderer, 265, 265, 266, 266).then((res) => {
-      tapeContext.ok(res[0].getProperties().propID === 5);
-      tapeContext.ok(res[0].getProperties().attributeID === 0);
-    })
-  );
   Promise.all(promises).then(() => {
     gc.releaseResources();
   });

@@ -11,15 +11,25 @@ function vtkWebGPUGlyph3DCellArrayMapper(publicAPI, model) {
 
   const superClass = { ...publicAPI };
 
+  publicAPI.setGlyphInstances = (val) => {
+    model.glyphInstances = val;
+  };
+
+  publicAPI.updateBuffers = () => {
+    superClass.updateBuffers();
+    publicAPI.setNumberOfInstances(model.glyphInstances);
+  };
+
   publicAPI.replaceShaderPosition = (hash, pipeline, vertexInput) => {
     const vDesc = pipeline.getShaderDescription('vertex');
     vDesc.addBuiltinInput('u32', '@builtin(instance_index) instanceIndex');
     vDesc.addBuiltinOutput('vec4<f32>', '@builtin(position) Position');
+    if (!vDesc.hasOutput('vertexVC')) vDesc.addOutput('vec3<f32>', 'vertexVC');
     let code = vDesc.getCode();
     code = vtkWebGPUShaderCache.substitute(code, '//VTK::Position::Impl', [
-      '    output.Position = rendererUBO.SCPCMatrix*mapperUBO.BCSCMatrix',
-      '      *glyphSSBO.values[input.instanceIndex].matrix',
-      '      *vertexBC;',
+      '    var vertexSC: vec4<f32> = mapperUBO.BCSCMatrix*glyphSSBO.values[input.instanceIndex].matrix*vertexBC;',
+      '    output.vertexVC = (rendererUBO.SCVCMatrix*vertexSC).xyz;',
+      '    output.Position = rendererUBO.SCPCMatrix*vertexSC;',
     ]).result;
     vDesc.setCode(code);
   };
@@ -145,7 +155,7 @@ function vtkWebGPUGlyph3DMapper(publicAPI, model) {
 
       for (let i = 0; i < model.children.length; i++) {
         const cellMapper = model.children[i];
-        cellMapper.setNumberOfInstances(model.numInstances);
+        cellMapper.setGlyphInstances(model.numInstances);
       }
     }
   };

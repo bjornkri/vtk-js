@@ -2,8 +2,44 @@ import macro from 'vtk.js/Sources/macros';
 import * as vtkMath from 'vtk.js/Sources/Common/Core/Math';
 import Constants from 'vtk.js/Sources/Rendering/Core/VolumeMapper/Constants';
 import vtkAbstractMapper from 'vtk.js/Sources/Rendering/Core/AbstractMapper';
+import vtkPiecewiseFunction from 'vtk.js/Sources/Common/DataModel/PiecewiseFunction';
 
 const { BlendMode, FilterMode } = Constants;
+
+function createRadonTransferFunction(
+  firstAbsorbentMaterialHounsfieldValue,
+  firstAbsorbentMaterialAbsorption,
+  maxAbsorbentMaterialHounsfieldValue,
+  maxAbsorbentMaterialAbsorption,
+  outputTransferFunction
+) {
+  let ofun = null;
+  if (outputTransferFunction) {
+    ofun = outputTransferFunction;
+    ofun.removeAllPoints();
+  } else {
+    ofun = vtkPiecewiseFunction.newInstance();
+  }
+  ofun.addPointLong(-1024, 0, 1, 1); // air (i.e. material with no absorption)
+  ofun.addPoint(
+    firstAbsorbentMaterialHounsfieldValue,
+    firstAbsorbentMaterialAbsorption
+  );
+  ofun.addPoint(
+    maxAbsorbentMaterialHounsfieldValue,
+    maxAbsorbentMaterialAbsorption
+  );
+
+  return ofun;
+}
+
+// ----------------------------------------------------------------------------
+// Static API
+// ----------------------------------------------------------------------------
+
+export const STATIC = {
+  createRadonTransferFunction,
+};
 
 // ----------------------------------------------------------------------------
 // vtkVolumeMapper methods
@@ -12,6 +48,8 @@ const { BlendMode, FilterMode } = Constants;
 function vtkVolumeMapper(publicAPI, model) {
   // Set our className
   model.classHierarchy.push('vtkVolumeMapper');
+
+  const superClass = { ...publicAPI };
 
   publicAPI.getBounds = () => {
     const input = publicAPI.getInputData();
@@ -50,6 +88,10 @@ function vtkVolumeMapper(publicAPI, model) {
     publicAPI.setBlendMode(BlendMode.ADDITIVE_INTENSITY_BLEND);
   };
 
+  publicAPI.setBlendModeToRadonTransform = () => {
+    publicAPI.setBlendMode(BlendMode.RADON_TRANSFORM_BLEND);
+  };
+
   publicAPI.getBlendModeAsString = () =>
     macro.enumToString(BlendMode, model.blendMode);
 
@@ -73,26 +115,25 @@ function vtkVolumeMapper(publicAPI, model) {
     publicAPI.setFilterMode(FilterMode.RAW);
   };
 
-  publicAPI.setGlobalIlluminationReach = (gl) => {
-    model.globalIlluminationReach = vtkMath.clampValue(gl, 0.0, 1.0);
-    publicAPI.modified();
-  };
+  publicAPI.setGlobalIlluminationReach = (gl) =>
+    superClass.setGlobalIlluminationReach(vtkMath.clampValue(gl, 0.0, 1.0));
 
-  publicAPI.setVolumetricScatteringBlending = (vsb) => {
-    model.volumetricScatteringBlending = vtkMath.clampValue(vsb, 0.0, 1.0);
+  publicAPI.setVolumetricScatteringBlending = (vsb) =>
+    superClass.setVolumetricScatteringBlending(
+      vtkMath.clampValue(vsb, 0.0, 1.0)
+    );
 
-    publicAPI.modified();
-  };
+  publicAPI.setVolumeShadowSamplingDistFactor = (vsdf) =>
+    superClass.setVolumeShadowSamplingDistFactor(vsdf >= 1.0 ? vsdf : 1.0);
 
-  publicAPI.setVolumeShadowSamplingDistFactor = (vsdf) => {
-    model.volumeShadowSamplingDistFactor = vsdf >= 1.0 ? vsdf : 1.0;
-    publicAPI.modified();
-  };
+  publicAPI.setAnisotropy = (at) =>
+    superClass.setAnisotropy(vtkMath.clampValue(at, -0.99, 0.99));
 
-  publicAPI.setAnisotropy = (at) => {
-    model.anisotropy = vtkMath.clampValue(at, -0.99, 0.99);
-    publicAPI.modified();
-  };
+  publicAPI.setLAOKernelSize = (ks) =>
+    superClass.setLAOKernelSize(vtkMath.floor(vtkMath.clampValue(ks, 1, 32)));
+
+  publicAPI.setLAOKernelRadius = (kr) =>
+    superClass.setLAOKernelRadius(kr >= 1 ? kr : 1);
 }
 
 // ----------------------------------------------------------------------------
@@ -116,6 +157,10 @@ const DEFAULT_VALUES = {
   globalIlluminationReach: 0.0,
   volumeShadowSamplingDistFactor: 5.0,
   anisotropy: 0.0,
+  // local ambient occlusion
+  localAmbientOcclusion: false,
+  LAOKernelSize: 15,
+  LAOKernelRadius: 7,
 };
 
 // ----------------------------------------------------------------------------
@@ -138,6 +183,9 @@ export function extend(publicAPI, model, initialValues = {}) {
     'globalIlluminationReach',
     'volumeShadowSamplingDistFactor',
     'anisotropy',
+    'localAmbientOcclusion',
+    'LAOKernelSize',
+    'LAOKernelRadius',
   ]);
 
   macro.setGetArray(publicAPI, model, ['ipScalarRange'], 2);
@@ -154,4 +202,4 @@ export const newInstance = macro.newInstance(extend, 'vtkVolumeMapper');
 
 // ----------------------------------------------------------------------------
 
-export default { newInstance, extend };
+export default { newInstance, extend, ...STATIC };

@@ -555,6 +555,7 @@ function vtkRenderWindowInteractor(publicAPI, model) {
           model.lastGamepadValues[gp.index] = {
             left: { buttons: {} },
             right: { buttons: {} },
+            none: { buttons: {} },
           };
         }
         for (let b = 0; b < gp.buttons.length; ++b) {
@@ -698,19 +699,46 @@ function vtkRenderWindowInteractor(publicAPI, model) {
     }
     callData.spinY /= wheelCoefficient;
 
+    // Wheel events are thought to scroll pages (i.e. multiple lines at once).
+    // See normalizeWheel() documentation for more context.
+    // While trackpad wheel events are many small (<1) wheel spins,
+    // mouse wheel events have absolute spin values higher than 1.
+    // Here the first spin value is "recorded", and used to normalize
+    // all the following mouse wheel events.
+    if (model.wheelTimeoutID === 0) {
+      // we attempt to distinguish between trackpads and mice
+      // .3 will be larger than the first trackpad event,
+      // but small enough to detect some common edge case mice
+      if (Math.abs(callData.spinY) >= 0.3) {
+        // Event is coming from mouse wheel
+        wheelCoefficient = Math.abs(callData.spinY);
+      } else {
+        // Event is coming from trackpad
+        wheelCoefficient = 1;
+      }
+    }
+    callData.spinY /= wheelCoefficient;
+
     if (model.wheelTimeoutID === 0) {
       publicAPI.startMouseWheelEvent(callData);
+      publicAPI.mouseWheelEvent(callData);
     } else {
       publicAPI.mouseWheelEvent(callData);
       clearTimeout(model.wheelTimeoutID);
     }
 
-    // start a timer to keep us animating while we get wheel events
-    model.wheelTimeoutID = setTimeout(() => {
+    if (model.mouseScrollDebounceByPass) {
       publicAPI.extendAnimation(600);
       publicAPI.endMouseWheelEvent();
       model.wheelTimeoutID = 0;
-    }, 200);
+    } else {
+      // start a timer to keep us animating while we get wheel events
+      model.wheelTimeoutID = setTimeout(() => {
+        publicAPI.extendAnimation(600);
+        publicAPI.endMouseWheelEvent();
+        model.wheelTimeoutID = 0;
+      }, 200);
+    }
   };
 
   publicAPI.handleMouseUp = (event) => {
@@ -784,7 +812,7 @@ function vtkRenderWindowInteractor(publicAPI, model) {
       if (pointers.length === 0) {
         const callData = {
           ...getModifierKeysFor(EMPTY_MOUSE_EVENT),
-          position: pointers[0].position,
+          position: getScreenEventPositionFor(event),
           deviceType: getDeviceTypeFor(event),
         };
         publicAPI.leftButtonReleaseEvent(callData);
@@ -832,7 +860,7 @@ function vtkRenderWindowInteractor(publicAPI, model) {
     // The original order of renderers needs to remain as
     // the first one is the one we want to manipulate the camera on.
     const rc = model._view?.getRenderable()?.getRenderers();
-    if (!rc) {
+    if (!rc || rc.length === 0) {
       return null;
     }
     rc.sort((a, b) => a.getLayer() - b.getLayer());
@@ -1122,6 +1150,9 @@ function vtkRenderWindowInteractor(publicAPI, model) {
         publicAPI.handleVisibilityChange
       );
     }
+    if (model.container) {
+      publicAPI.unbindEvents();
+    }
     superDelete();
   };
 
@@ -1165,6 +1196,7 @@ const DEFAULT_VALUES = {
   lastGamepadValues: {},
   preventDefaultOnPointerDown: false,
   preventDefaultOnPointerUp: false,
+  mouseScrollDebounceByPass: false,
 };
 
 // ----------------------------------------------------------------------------
@@ -1204,6 +1236,7 @@ export function extend(publicAPI, model, initialValues = {}) {
     'picker',
     'preventDefaultOnPointerDown',
     'preventDefaultOnPointerUp',
+    'mouseScrollDebounceByPass',
   ]);
   macro.moveToProtected(publicAPI, model, ['view']);
 

@@ -7,6 +7,7 @@ import vtkProp from '../Prop';
 import vtkViewport, { IViewportInitialValues } from '../Viewport';
 import vtkVolume from '../Volume';
 import vtkTexture from '../Texture';
+import { EventHandler, vtkSubscription } from '../../../interfaces';
 
 
 export interface IRendererInitialValues extends IViewportInitialValues {
@@ -35,8 +36,19 @@ export interface IRendererInitialValues extends IViewportInitialValues {
 	occlusionRatio?: number;
 	maximumNumberOfPeels?: number;
 	texturedBackground?: boolean;
+	environmentTexture?: vtkTexture;
+	environmentTextureDiffuseStrength?: number;
+	environmentTextureSpecularStrength?: number;
+	useEnvironmentTextureAsBackground?: boolean;
 	pass?: number;
 }
+
+export type VtkRendererEvent =
+  | { type: 'CreateCameraEvent', camera: vtkCamera }
+  | { type: 'ActiveCameraEvent', camera: vtkCamera }
+  | { type: 'ComputeVisiblePropBoundsEvent', renderer: vtkRenderer }
+  | { type: 'ResetCameraClippingRangeEvent', renderer: vtkRenderer }
+  | { type: 'ResetCameraEvent', renderer: vtkRenderer };
 
 export interface vtkRenderer extends vtkViewport {
 
@@ -50,6 +62,12 @@ export interface vtkRenderer extends vtkViewport {
 	 * @param {vtkProp} actor The vtkProp instance.
 	 */
 	addActor(actor: vtkProp): boolean;
+
+	/**
+	 * Check if the renderer already has the specified light.
+	 * @param {vtkLight} light The vtkLight instance.
+	 */
+	hasLight(light: vtkLight): boolean;
 
 	/**
 	 * Add a light to the list of lights.
@@ -115,7 +133,25 @@ export interface vtkRenderer extends vtkViewport {
 	 * 
 	 * @default null
 	 */
-	getBackgroundTexture(): vtkTexture;
+	getEnvironmentTexture(): vtkTexture;
+
+	/**
+	 * Returns the diffuse strength of the set environment texture.
+	 * @default 1
+	 */
+	getEnvironmentTextureDiffuseStrength(): number;
+
+	/**
+	 * Returns the specular strength of the set environment texture.
+	 * @default 1
+	 */
+	getEnvironmentTextureSpecularStrength(): number;
+
+	/**
+	  * Gets whether or not the environment texture is being used as the background for the view.
+	  * @default false
+	  */
+	getUseEnvironmentTextureAsBackground(): boolean;
 
 	/**
 	 * 
@@ -347,9 +383,27 @@ export interface vtkRenderer extends vtkViewport {
 
 	/**
 	 * 
-	 * @param {vtkTexture} backgroundTexture 
+	 * @param {vtkTexture} environmentTexture 
 	 */
-	setBackgroundTexture(backgroundTexture: vtkTexture): boolean;
+	setEnvironmentTexture(environmentTexture: vtkTexture): boolean;
+
+	/**
+	 * Sets the diffuse strength of the set environment texture.
+	 * @param {number} diffuseStrength the new diffuse strength.
+	 */
+	setEnvironmentTextureDiffuseStrength(diffuseStrength: number): boolean;
+
+	 /**
+	  * Sets the specular strength of the set environment texture.
+	  * @param {number} specularStrength the new specular strength.
+	  */
+	setEnvironmentTextureSpecularStrength(specularStrength: number): boolean;
+
+	/**
+	  * Sets whether or not to use the environment texture as the background for the view.
+	  * @param {number} textureAsBackground
+	  */
+	setUseEnvironmentTextureAsBackground(textureAsBackground: boolean): boolean;
 
 	/**
 	 * 
@@ -588,6 +642,37 @@ export interface vtkRenderer extends vtkViewport {
 	 * Not Implemented yet
 	 */
 	visibleVolumeCount(): any;
+
+	/**
+     * Set the viewport background.
+	 *
+     * @param {Number} r Defines the red component (between 0 and 1).
+     * @param {Number} g Defines the green component (between 0 and 1).
+     * @param {Number} b Defines the blue component (between 0 and 1).
+     * @param {Number} a Defines the alpha component (between 0 and 1).
+     */
+	setBackground(r: number, g: number, b: number, a: number): boolean;
+
+	/**
+     * Set the viewport background.
+	 *
+     * @param {Number} r Defines the red component (between 0 and 1).
+     * @param {Number} g Defines the green component (between 0 and 1).
+     * @param {Number} b Defines the blue component (between 0 and 1).
+     */
+    setBackground(r: number, g: number, b: number): boolean;
+
+	/**
+     * Set the viewport background.
+	 *
+     * @param {Number[]} background The RGB color array.
+     */
+    setBackground(background: number[]): boolean;
+
+	/**
+	 * Adds an event listener.
+	 */
+	onEvent(cb: EventHandler, priority?: number): Readonly<vtkSubscription>;
 }
 
 /**

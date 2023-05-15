@@ -167,7 +167,7 @@ function vtkWebGPUVolumePass(publicAPI, model) {
     }
 
     // we just render our delegates in order
-    model.currentParent = viewNode;
+    model._currentParent = viewNode;
 
     // create stuff we need
     publicAPI.initialize(viewNode);
@@ -629,7 +629,7 @@ function vtkWebGPUVolumePass(publicAPI, model) {
       fragment: {
         targets: [
           {
-            format: 'bgra8unorm',
+            format: 'rgba16float',
             blend: {
               color: {
                 srcFactor: 'one',

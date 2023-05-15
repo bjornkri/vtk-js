@@ -19,7 +19,7 @@ function vtkWebGPUOpaquePass(publicAPI, model) {
     }
 
     // we just render our delegates in order
-    model.currentParent = viewNode;
+    model._currentParent = viewNode;
 
     const device = viewNode.getDevice();
 
@@ -31,7 +31,7 @@ function vtkWebGPUOpaquePass(publicAPI, model) {
       model.colorTexture.create(device, {
         width: viewNode.getCanvas().width,
         height: viewNode.getCanvas().height,
-        format: 'bgra8unorm',
+        format: 'rgba16float',
         /* eslint-disable no-undef */
         /* eslint-disable no-bitwise */
         usage:

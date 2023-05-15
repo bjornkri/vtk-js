@@ -17,8 +17,6 @@ import { ViewTypes } from 'vtk.js/Sources/Widgets/Core/WidgetManager/Constants';
 function vtkAngleWidget(publicAPI, model) {
   model.classHierarchy.push('vtkAngleWidget');
 
-  const superClass = { ...publicAPI };
-
   // --- Widget Requirement ---------------------------------------------------
 
   model.methodsToLink = [
@@ -29,8 +27,13 @@ function vtkAngleWidget(publicAPI, model) {
     'defaultScale',
     'scaleInPixels',
   ];
-  model.behavior = widgetBehavior;
-  model.widgetState = stateGenerator();
+
+  model._onManipulatorChanged = () => {
+    model.widgetState.getMoveHandle().setManipulator(model.manipulator);
+    model.widgetState.getHandleList().forEach((handle) => {
+      handle.setManipulator(model.manipulator);
+    });
+  };
 
   publicAPI.getRepresentationsForViewType = (viewType) => {
     switch (viewType) {
@@ -40,8 +43,10 @@ function vtkAngleWidget(publicAPI, model) {
       case ViewTypes.VOLUME:
       default:
         return [
-          { builder: vtkSphereHandleRepresentation, labels: ['handles'] },
-          { builder: vtkSphereHandleRepresentation, labels: ['moveHandle'] },
+          {
+            builder: vtkSphereHandleRepresentation,
+            labels: ['handles', 'moveHandle'],
+          },
           {
             builder: vtkPolyLineRepresentation,
             labels: ['handles', 'moveHandle'],
@@ -72,14 +77,6 @@ function vtkAngleWidget(publicAPI, model) {
     return vtkMath.angleBetweenVectors(vec1, vec2);
   };
 
-  publicAPI.setManipulator = (manipulator) => {
-    superClass.setManipulator(manipulator);
-    model.widgetState.getMoveHandle().setManipulator(manipulator);
-    model.widgetState.getHandleList().forEach((handle) => {
-      handle.setManipulator(manipulator);
-    });
-  };
-
   // --------------------------------------------------------------------------
   // initialization
   // --------------------------------------------------------------------------
@@ -102,14 +99,17 @@ function vtkAngleWidget(publicAPI, model) {
 
 // ----------------------------------------------------------------------------
 
-const DEFAULT_VALUES = {
+const defaultValues = (initialValues) => ({
   // manipulator: null,
-};
+  behavior: widgetBehavior,
+  widgetState: stateGenerator(),
+  ...initialValues,
+});
 
 // ----------------------------------------------------------------------------
 
 export function extend(publicAPI, model, initialValues = {}) {
-  Object.assign(model, DEFAULT_VALUES, initialValues);
+  Object.assign(model, defaultValues(initialValues));
 
   vtkAbstractWidgetFactory.extend(publicAPI, model, initialValues);
   macro.setGet(publicAPI, model, ['manipulator']);

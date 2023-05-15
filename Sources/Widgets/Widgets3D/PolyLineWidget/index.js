@@ -3,7 +3,6 @@ import vtkAbstractWidgetFactory from 'vtk.js/Sources/Widgets/Core/AbstractWidget
 import vtkPlanePointManipulator from 'vtk.js/Sources/Widgets/Manipulators/PlaneManipulator';
 import vtkPolyLineRepresentation from 'vtk.js/Sources/Widgets/Representations/PolyLineRepresentation';
 import vtkSphereHandleRepresentation from 'vtk.js/Sources/Widgets/Representations/SphereHandleRepresentation';
-import vtkSVGLandmarkRepresentation from 'vtk.js/Sources/Widgets/SVG/SVGLandmarkRepresentation';
 
 import widgetBehavior from 'vtk.js/Sources/Widgets/Widgets3D/PolyLineWidget/behavior';
 import stateGenerator from 'vtk.js/Sources/Widgets/Widgets3D/PolyLineWidget/state';
@@ -31,8 +30,6 @@ function vtkPolyLineWidget(publicAPI, model) {
     'useActiveColor',
     'scaleInPixels',
   ];
-  model.behavior = widgetBehavior;
-  model.widgetState = stateGenerator();
 
   publicAPI.getRepresentationsForViewType = (viewType) => {
     switch (viewType) {
@@ -49,16 +46,6 @@ function vtkPolyLineWidget(publicAPI, model) {
           {
             builder: vtkSphereHandleRepresentation,
             labels: ['moveHandle'],
-          },
-          {
-            builder: vtkSVGLandmarkRepresentation,
-            initialValues: {
-              textProps: {
-                dx: 12,
-                dy: -12,
-              },
-            },
-            labels: ['handles'],
           },
           {
             builder: vtkPolyLineRepresentation,
@@ -102,14 +89,17 @@ function vtkPolyLineWidget(publicAPI, model) {
 
 // ----------------------------------------------------------------------------
 
-const DEFAULT_VALUES = {
-  // manipulator: null,
-};
+const defaultValues = (initialValues) => ({
+  manipulator: null,
+  behavior: widgetBehavior,
+  widgetState: stateGenerator(),
+  ...initialValues,
+});
 
 // ----------------------------------------------------------------------------
 
 export function extend(publicAPI, model, initialValues = {}) {
-  Object.assign(model, DEFAULT_VALUES, initialValues);
+  Object.assign(model, defaultValues(initialValues));
 
   vtkAbstractWidgetFactory.extend(publicAPI, model, initialValues);
   macro.setGet(publicAPI, model, ['manipulator']);

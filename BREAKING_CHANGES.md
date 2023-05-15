@@ -1,3 +1,20 @@
+## From 26.x to 27
+
+- Change all `handleEvent` signatures of manipulators. Used to be `handleEvent(callData, glRenderWindow): vec3`, it is now `handleEvent(callData, glRenderWindow): { worldCoords: Nullable<vec3>, worldDirection?: mat3 }`.
+
+## From 25.x to 26
+
+- **ResliceCursorWidget**: vtkResliceCursorContextRepresentation is deprecated and removed.
+Instead, a `vtkSphereHandleRepresentation` is used for `rotation` and `center` handles,
+and a `vtkLineHandleRepresenttion` is used for the axes. `rotateLineInView()` now
+takes an axis name (string, e.g. 'XinY') instead of a substate. `enableRotation`, `enableTranslation` and `keepOrthogonality` in widgetState are replaced by widget behavior accessors (e.g. `widgetInView.setEnableRotation(false)`). See RCW example.
+  - `widgetState.setShowCenter()` is replaced by `widgetState.getCenterHandle.setVisible()`
+  - `widgetState.setSphereRadius()` is replaced by `widgetState.getCenterHandle().setScale1()` and `widgetState.getStatesWithLabel('rotation').forEach((handle) => handle.setScale1())`
+  - `widgetState.setLineThickness(t)` is replaced by `widgetState.getStatesWithLabel('line').forEach((handle) => handle.setScale3(t,t,t))`
+  - `setScaleInPixels()` should now be set on the widget instead of the `widgetInView`.
+  - `widgetState.setOpacity()` is replaced by `widgetState.getStatesWithLabel('handles').forEach((handle) => handle.setOpacity())`
+- SVGRepresentation and SVG widget support has been fully removed.
+
 ## From 24.x to 25
 
 - **math**: For functions calling math functions for computations with matrices, the format must now be number[] or Matrix as defined in the typescript definitions.

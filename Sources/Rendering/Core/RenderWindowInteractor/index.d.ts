@@ -1,4 +1,5 @@
 import { vtkObject, vtkSubscription } from "../../../interfaces";
+import { Nullable } from "../../../types";
 import vtkRenderer from "../Renderer";
 import { Axis, Device, Input } from "./Constants";
 
@@ -59,6 +60,7 @@ export interface IRenderWindowInteractorInitialValues {
 	moveTimeoutID?: number;
 	preventDefaultOnPointerDown?: boolean;
 	preventDefaultOnPointerUp?: boolean;
+	mouseScrollDebounceByPass?: boolean;
 }
 
 interface IPosition {
@@ -162,6 +164,11 @@ export interface vtkRenderWindowInteractor extends vtkObject {
 	 * @default false
 	 */
 	getPreventDefaultOnPointerUp(): boolean;
+
+	/**
+	 * @default false
+	 */
+	getMouseScrollDebounceByPass(): boolean;
 
 	/**
 	 * 
@@ -848,6 +855,13 @@ export interface vtkRenderWindowInteractor extends vtkObject {
 	 */
 	setPreventDefaultOnPointerUp(preventDefault: boolean): boolean;
 
+	/**
+	 * Allow system to bypass scrolling debounce. This function must be called to allow the debounce to be bypassed
+	 * @param mouseScrollDebounceByPass
+	 */
+
+	setMouseScrollDebounceByPass(mouseScrollDebounceByPass:boolean): boolean;
+
    /**
 	 *
 	 * @param recognizeGestures
@@ -969,6 +983,12 @@ export interface vtkRenderWindowInteractor extends vtkObject {
 	 *
 	 */
 	getCurrentRenderer(): void;
+
+	/**
+	 * Manually sets the current renderer.
+	 * @param {vtkRenderer} ren
+	 */
+	setCurrentRenderer(ren: vtkRenderer): void;
 
 	/**
 	 *
@@ -1152,7 +1172,7 @@ export interface vtkRenderWindowInteractor extends vtkObject {
 	 * @param {Number} x 
 	 * @param {Number} y 
 	 */
-	findPokedRenderer(x: number, y: number): vtkRenderer;
+	findPokedRenderer(x: number, y: number): Nullable<vtkRenderer>;
 
 	/**
 	 * only render if we are not animating. If we are animating

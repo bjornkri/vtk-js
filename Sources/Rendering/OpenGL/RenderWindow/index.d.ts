@@ -34,9 +34,9 @@ export interface IOpenGLRenderWindowInitialValues {
 }
 
 export interface ICaptureOptions {
-	resetCamera: boolean;
-	size: Size;
-	scale: number
+	resetCamera?: boolean;
+	size?: Size;
+	scale?: number
 }
 
 export interface I3DContextOptions {
@@ -95,6 +95,11 @@ export interface vtkOpenGLRenderWindow extends vtkOpenGLRenderWindowBase {
 	 * Get the frame buffer size.
 	 */
 	getFramebufferSize(): Vector2;
+
+	/**
+	 * Get the webgl canvas.
+	 */
+	getCanvas(): Nullable<HTMLCanvasElement>;
 
 	/**
 	 * Check if a point is in the viewport.
@@ -227,19 +232,34 @@ export interface vtkOpenGLRenderWindow extends vtkOpenGLRenderWindowBase {
 	get3DContext(options: I3DContextOptions): Nullable<WebGLRenderingContext>;
 
 	/**
-	 *
+	 * Request an XR session on the user device with WebXR,
+   * typically in response to a user request such as a button press.
 	 */
-	startVR(): void;
+	startXR(): void;
+
+  /**
+   * When an XR session is available, set up the XRWebGLLayer
+   * and request the first animation frame for the device
+   */
+   enterXR(): void,
+
+   /**
+    * Adjust world-to-physical parameters for different viewing modalities
+    *
+    * @param {Number} inputRescaleFactor
+    * @param {Number} inputTranslateZ
+    */
+   resetXRScene(inputRescaleFactor: number, inputTranslateZ: number): void,
+
+	/**
+	 * Request to stop the current XR session
+	 */
+	stopXR(): void;
 
 	/**
 	 *
 	 */
-	stopVR(): void;
-
-	/**
-	 *
-	 */
-	vrRender(): void;
+	xrRender(): void;
 
 	/**
 	 *
@@ -269,8 +289,10 @@ export interface vtkOpenGLRenderWindow extends vtkOpenGLRenderWindowBase {
 	 * @param {VtkDataTypes} vtktype 
 	 * @param {Number} numComps 
 	 * @param {Boolean} useFloat 
+	 * @param {unknown} oglNorm16Ext The WebGL EXT_texture_norm16 extension context
+	 * @param {Boolean} useHalfFloat
 	 */
-	getDefaultTextureInternalFormat(vtktype: VtkDataTypes, numComps: number, useFloat: boolean): void;
+	getDefaultTextureInternalFormat(vtktype: VtkDataTypes, numComps: number, oglNorm16Ext?: unknown, useHalfFloat?: boolean): void;
 
 	/**
 	 * 
@@ -298,7 +320,7 @@ export interface vtkOpenGLRenderWindow extends vtkOpenGLRenderWindowBase {
 	 * @param {String} format
 	 * @param {ICaptureOptions} options
 	 */
-	captureNextImage(format: string, options: ICaptureOptions): Nullable<Promise<string>>;
+	captureNextImage(format: string, options?: ICaptureOptions): Nullable<Promise<string>>;
 
 	/**
 	 *
@@ -327,7 +349,18 @@ export interface vtkOpenGLRenderWindow extends vtkOpenGLRenderWindowBase {
 	setViewStream(stream: vtkViewStream): boolean;
 
 	/**
-	 *
+	 * Sets the pixel width and height of the rendered image.  
+	 * 
+	 * WebGL and WebGPU render windows apply these values to 
+	 * the width and height attribute of the canvas element.
+	 * 
+	 * To match the device resolution in browser environments, 
+	 * multiply the container size by `window.devicePixelRatio`
+	 * `apiSpecificRenderWindow.setSize(Math.floor(containerWidth * devicePixelRatio), Math.floor(containerHeight * devicePixelRatio));
+	 * See the VTK.js FullscreenRenderWindow class for an example.
+	 * 
+	 * @see getComputedDevicePixelRatio()
+	 * 
 	 * @param {Vector2} size 
 	 */
 	setSize(size: Vector2): void;
@@ -361,6 +394,19 @@ export interface vtkOpenGLRenderWindow extends vtkOpenGLRenderWindowBase {
 	 *
 	 */
 	getVrResolution(): Vector2;
+
+	/**
+	 * Scales the size of a browser CSS pixel to a rendered canvas pixel.  
+	 * `const renderedPixelWidth = cssPixelWidth * apiRenderWindow.getComputedDevicePixelRatio()`
+	 * Use to scale rendered objects to a consistent perceived size or DOM pixel position.
+	 * 
+	 * Rather than using window.devicePixelRatio directly, the device pixel ratio is inferred
+	 * from the container CSS pixel size and rendered image pixel size. The user directly sets the rendered pixel size.
+	 * 
+	 * @see setSize()
+	 * @see getContainerSize()
+	 */
+	getComputedDevicePixelRatio(): number;
 }
 
 /**

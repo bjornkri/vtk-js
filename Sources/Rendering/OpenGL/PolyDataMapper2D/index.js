@@ -35,11 +35,11 @@ function vtkOpenGLPolyDataMapper2D(publicAPI, model) {
     if (prepass) {
       model.openGLActor2D =
         publicAPI.getFirstAncestorOfType('vtkOpenGLActor2D');
-      model.openGLRenderer =
+      model._openGLRenderer =
         model.openGLActor2D.getFirstAncestorOfType('vtkOpenGLRenderer');
-      model._openGLRenderWindow = model.openGLRenderer.getParent();
-      model.openGLCamera = model.openGLRenderer.getViewNodeFor(
-        model.openGLRenderer.getRenderable().getActiveCamera()
+      model._openGLRenderWindow = model._openGLRenderer.getParent();
+      model.openGLCamera = model._openGLRenderer.getViewNodeFor(
+        model._openGLRenderer.getRenderable().getActiveCamera()
       );
     }
   };
@@ -51,34 +51,9 @@ function vtkOpenGLPolyDataMapper2D(publicAPI, model) {
   };
 
   publicAPI.getShaderTemplate = (shaders, ren, actor) => {
-    const openGLSpecProp = model.renderable.getViewSpecificProperties().OpenGL;
-
-    let vertexShaderCode = vtkPolyData2DVS;
-    if (openGLSpecProp) {
-      const vertexSpecProp = openGLSpecProp.VertexShaderCode;
-      if (vertexSpecProp !== undefined && vertexSpecProp !== '') {
-        vertexShaderCode = vertexSpecProp;
-      }
-    }
-    shaders.Vertex = vertexShaderCode;
-
-    let fragmentShaderCode = vtkPolyData2DFS;
-    if (openGLSpecProp) {
-      const fragmentSpecProp = openGLSpecProp.FragmentShaderCode;
-      if (fragmentSpecProp !== undefined && fragmentSpecProp !== '') {
-        fragmentShaderCode = fragmentSpecProp;
-      }
-    }
-    shaders.Fragment = fragmentShaderCode;
-
-    let geometryShaderCode = '';
-    if (openGLSpecProp) {
-      const geometrySpecProp = openGLSpecProp.GeometryShaderCode;
-      if (geometrySpecProp !== undefined) {
-        geometryShaderCode = geometrySpecProp;
-      }
-    }
-    shaders.Geometry = geometryShaderCode;
+    shaders.Vertex = vtkPolyData2DVS;
+    shaders.Fragment = vtkPolyData2DFS;
+    shaders.Geometry = '';
   };
 
   publicAPI.render = () => {
@@ -90,7 +65,7 @@ function vtkOpenGLPolyDataMapper2D(publicAPI, model) {
       }
     }
     const actor = model.openGLActor2D.getRenderable();
-    const ren = model.openGLRenderer.getRenderable();
+    const ren = model._openGLRenderer.getRenderable();
     publicAPI.renderPiece(ren, actor);
   };
 
@@ -122,10 +97,10 @@ function vtkOpenGLPolyDataMapper2D(publicAPI, model) {
   publicAPI.renderPieceStart = (ren, actor) => {
     model.primitiveIDOffset = 0;
 
-    if (model.openGLRenderer.getSelector()) {
-      switch (model.openGLRenderer.getSelector().getCurrentPass()) {
+    if (model._openGLRenderer.getSelector()) {
+      switch (model._openGLRenderer.getSelector().getCurrentPass()) {
         default:
-          model.openGLRenderer.getSelector().renderProp(actor);
+          model._openGLRenderer.getSelector().renderProp(actor);
       }
     }
     // make sure the BOs are up to date
@@ -225,8 +200,10 @@ function vtkOpenGLPolyDataMapper2D(publicAPI, model) {
         const p = vtkPoints.newInstance();
         const numPts = points.getNumberOfPoints();
         p.setNumberOfPoints(numPts);
+        const point = [];
         for (let i = 0; i < numPts; ++i) {
-          transformCoordinate.setValue(points.getPoint(i));
+          points.getPoint(i, point);
+          transformCoordinate.setValue(point);
           const v = transformCoordinate.getComputedDoubleViewportValue(ren);
           p.setPoint(i, v[0], v[1], 0.0);
         }
@@ -284,54 +261,6 @@ function vtkOpenGLPolyDataMapper2D(publicAPI, model) {
   publicAPI.renderPieceFinish = (ren, actor) => {
     if (model.lastBoundBO) {
       model.lastBoundBO.getVAO().release();
-    }
-  };
-
-  publicAPI.buildShaders = (shaders, ren, actor) => {
-    publicAPI.getShaderTemplate(shaders, ren, actor);
-
-    // user specified pre replacements
-    const openGLSpec = model.renderable.getViewSpecificProperties().OpenGL;
-    let shaderReplacements = null;
-    if (openGLSpec) {
-      shaderReplacements = openGLSpec.ShaderReplacements;
-    }
-
-    if (shaderReplacements) {
-      for (let i = 0; i < shaderReplacements.length; i++) {
-        const currReplacement = shaderReplacements[i];
-        if (currReplacement.replaceFirst) {
-          const shaderType = currReplacement.shaderType;
-          const ssrc = shaders[shaderType];
-          const substituteRes = vtkShaderProgram.substitute(
-            ssrc,
-            currReplacement.originalValue,
-            currReplacement.replacementValue,
-            currReplacement.replaceAll
-          );
-          shaders[shaderType] = substituteRes.result;
-        }
-      }
-    }
-
-    publicAPI.replaceShaderValues(shaders, ren, actor);
-
-    // user specified post replacements
-    if (shaderReplacements) {
-      for (let i = 0; i < shaderReplacements.length; i++) {
-        const currReplacement = shaderReplacements[i];
-        if (!currReplacement.replaceFirst) {
-          const shaderType = currReplacement.shaderType;
-          const ssrc = shaders[shaderType];
-          const substituteRes = vtkShaderProgram.substitute(
-            ssrc,
-            currReplacement.originalValue,
-            currReplacement.replacementValue,
-            currReplacement.replaceAll
-          );
-          shaders[shaderType] = substituteRes.result;
-        }
-      }
     }
   };
 
@@ -600,10 +529,10 @@ function vtkOpenGLPolyDataMapper2D(publicAPI, model) {
       cellBO.setMapperShaderParameters(
         ren,
         actor,
-        model.openGLRenderer.getTiledSizeAndOrigin()
+        model._openGLRenderer.getTiledSizeAndOrigin()
       );
 
-      const selector = model.openGLRenderer.getSelector();
+      const selector = model._openGLRenderer.getSelector();
       cellBO
         .getProgram()
         .setUniform3fArray(
@@ -675,7 +604,7 @@ function vtkOpenGLPolyDataMapper2D(publicAPI, model) {
     size[0] = round((size[0] * (visVP[2] - visVP[0])) / (vport[2] - vport[0]));
     size[1] = round((size[1] * (visVP[3] - visVP[1])) / (vport[3] - vport[1]));
 
-    const winSize = model.openGLRenderer.getParent().getSize();
+    const winSize = model._openGLRenderer.getParent().getSize();
 
     const xoff = round(actorPos[0] - (visVP[0] - vport[0]) * winSize[0]);
     const yoff = round(actorPos[1] - (visVP[1] - vport[1]) * winSize[1]);
@@ -740,6 +669,11 @@ export function extend(publicAPI, model, initialValues = {}) {
   // Inheritance
   vtkViewNode.extend(publicAPI, model, initialValues);
   vtkReplacementShaderMapper.implementReplaceShaderCoincidentOffset(
+    publicAPI,
+    model,
+    initialValues
+  );
+  vtkReplacementShaderMapper.implementBuildShadersWithReplacements(
     publicAPI,
     model,
     initialValues

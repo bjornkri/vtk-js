@@ -16,7 +16,9 @@ import 'vtk.js/Sources/Rendering/OpenGL/Texture';
 import 'vtk.js/Sources/Rendering/OpenGL/Glyph3DMapper';
 
 // Volume
+import 'vtk.js/Sources/Rendering/OpenGL/ImageResliceMapper';
 import 'vtk.js/Sources/Rendering/OpenGL/ImageMapper';
+import 'vtk.js/Sources/Rendering/OpenGL/ImageCPRMapper';
 import 'vtk.js/Sources/Rendering/OpenGL/ImageSlice';
 import 'vtk.js/Sources/Rendering/OpenGL/Volume';
 import 'vtk.js/Sources/Rendering/OpenGL/VolumeMapper';

@@ -37,6 +37,14 @@ export interface IRenderingComponents {
  */
 export function extractRenderingComponents(renderer: vtkRenderer): IRenderingComponents;
 
+/**
+ * This method returns the world distance that corresponds to the height of a
+ * single display pixel at a given coordinate. For example, to determine the
+ * (vertical) distance that matches a display distance of 30px for a coordinate
+ * `coord`, you would compute `30 * getPixelWorldHeightAtCoord(coord)`.
+ */
+export function getPixelWorldHeightAtCoord(coord: []): Number;
+
 export interface vtkWidgetManager extends vtkObject {
   /**
    * The the captureOn value. 
@@ -73,6 +81,13 @@ export interface vtkWidgetManager extends vtkObject {
    * Get all the underlying widgets.
    */
   getWidgets(): vtkAbstractWidget[];
+
+  /**
+   * Get the active widget.
+   *
+   * If no widget is active, returns null.
+   */
+  getActiveWidget(): Nullable<vtkAbstractWidget>;
 
   /**
    * Get the view id.

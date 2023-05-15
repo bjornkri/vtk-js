@@ -100,7 +100,7 @@ function widgetBehavior(publicAPI, model) {
 
   publicAPI.updateFromOrigin = (callData) => {
     model.planeManipulator.setWidgetNormal(model.widgetState.getNormal());
-    const worldCoords = model.planeManipulator.handleEvent(
+    const { worldCoords } = model.planeManipulator.handleEvent(
       callData,
       model._apiSpecificRenderWindow
     );
@@ -155,10 +155,6 @@ function vtkImplicitPlaneWidget(publicAPI, model) {
 
   // --- Widget Requirement ---------------------------------------------------
 
-  model.widgetState = vtkImplicitPlaneRepresentation.generateState();
-
-  model.behavior = widgetBehavior;
-
   model.methodsToLink = [
     'representationStyle',
     'sphereResolution',
@@ -184,12 +180,16 @@ function vtkImplicitPlaneWidget(publicAPI, model) {
 
 // ----------------------------------------------------------------------------
 
-const DEFAULT_VALUES = {};
+const defaultValues = (initialValues) => ({
+  behavior: widgetBehavior,
+  widgetState: vtkImplicitPlaneRepresentation.generateState(),
+  ...initialValues,
+});
 
 // ----------------------------------------------------------------------------
 
 export function extend(publicAPI, model, initialValues = {}) {
-  Object.assign(model, DEFAULT_VALUES, initialValues);
+  Object.assign(model, defaultValues(initialValues));
 
   vtkAbstractWidgetFactory.extend(publicAPI, model, initialValues);
 

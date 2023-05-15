@@ -75,10 +75,7 @@ function vtkAbstractWidget(publicAPI, model) {
     }
   };
 
-  publicAPI.getViewWidgets = () =>
-    model._factory
-      .getViewIds()
-      .map((viewId) => model._factory.getWidgetForView({ viewId }));
+  publicAPI.getViewWidgets = () => model._factory.getViewWidgets();
 
   // --------------------------------------------------------------------------
   // Initialization calls
@@ -112,7 +109,11 @@ export function extend(publicAPI, model, initialValues = {}) {
     'handleVisibility',
     '_widgetManager',
   ]);
-  macro.get(publicAPI, model, ['representations', 'widgetState']);
+  macro.get(publicAPI, model, [
+    'representations',
+    'widgetState',
+    'activeState',
+  ]);
   macro.moveToProtected(publicAPI, model, ['widgetManager']);
   macro.event(publicAPI, model, 'ActivateHandle');
 

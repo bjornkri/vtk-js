@@ -44,6 +44,7 @@ varying vec3 vertexVCVSOutput;
 
 #ifdef vtkImageLabelOutlineOn
 uniform int outlineThickness;
+uniform float outlineOpacity;
 uniform float vpWidth;
 uniform float vpHeight;
 uniform float vpOffsetX;
@@ -64,6 +65,8 @@ uniform float vSpecular;
 
 //VTK::VolumeShadowOn
 //VTK::SurfaceShadowOn
+//VTK::localAmbientOcclusionOn
+//VTK::LAO::Dec
 //VTK::VolumeShadow::Dec
 
 // define vtkComputeNormalFromOpacity
@@ -201,10 +204,13 @@ uniform vec4 ipScalarRangeMax;
 // global and custom variables (a temporary section before photorealistics rendering module is complete)
 vec3 rayDirVC;
 float sampleDistanceISVS;
+float sampleDistanceIS;
 
 #define SQRT3    1.7321
 #define INV4PI   0.0796
 #define EPSILON  0.001
+#define PI       3.1415
+#define PI2      9.8696
 
 //=======================================================================
 // Webgl2 specific version of functions
@@ -308,9 +314,9 @@ vec4 getTextureValue(vec3 ijk)
 #if vtkLightComplexity > 0
 vec3 IStoVC(vec3 posIS){
   vec3 posVC = posIS / vVCToIJK;
-  return posVC.x * vPlaneNormal0 + 
-         posVC.y * vPlaneNormal2 + 
-         posVC.z * vPlaneNormal4 + 
+  return posVC.x * vPlaneNormal0 +
+         posVC.y * vPlaneNormal2 +
+         posVC.z * vPlaneNormal4 +
          vOriginVC;
 }
 
@@ -320,7 +326,7 @@ vec3 VCtoIS(vec3 posVC){
   posVC = vec3(
     dot(posVC, vPlaneNormal0),
     dot(posVC, vPlaneNormal2),
-    dot(posVC, vPlaneNormal4));  
+    dot(posVC, vPlaneNormal4));
   return posVC * vVCToIJK;
 }
 #endif
@@ -340,7 +346,7 @@ vec3 rotateToIDX(vec3 dirVC){
   dirIS.xyz = vec3(
     dot(dirVC, vPlaneNormal0),
     dot(dirVC, vPlaneNormal2),
-    dot(dirVC, vPlaneNormal4));  
+    dot(dirVC, vPlaneNormal4));
   return dirIS;
 }
 #endif
@@ -360,135 +366,146 @@ float computeGradientOpacityFactor(
 //=======================================================================
 // compute the normal and gradient magnitude for a position, uses forward difference
 #if (vtkLightComplexity > 0) || (defined vtkGradientOpacityOn)
+#ifdef vtkClippingPlanesOn
+  void adjustClippedVoxelValues(vec3 pos, vec3 texPos[3], inout vec3 g1)
+  {
+    vec3 g1VC[3];
+    for (int i = 0; i < 3; ++i)
+    {
+      g1VC[i] = IStoVC(texPos[i]);
+    }
+    vec3 posVC = IStoVC(pos);
+    for (int i = 0; i < clip_numPlanes; ++i)
+    {
+      for (int j = 0; j < 3; ++j)
+      {
+        if(dot(vec3(vClipPlaneOrigins[i] - g1VC[j].xyz), vClipPlaneNormals[i]) > 0.0)
+        {
+          g1[j] = 0.0;
+        }
+      }
+    }
+  }
+#endif
+
   #ifdef vtkComputeNormalFromOpacity
     #ifdef vtkGradientOpacityOn
-      vec4 computeNormalForDensity(vec3 pos, float scalar, vec3 tstep, out mat3 scalarInterp, out vec3 secondaryGradientMag)
+      vec4 computeDensityNormal(float gradientMag, vec3 scalarInterp[2])
       {
+    #else
+      //if gradient opacity not on but using density gradient
+      vec4 computeDensityNormal(vec3 scalarInterp[2])
+      {
+    #endif
+        vec3 opacityG1, opacityG2;
+        opacityG1.x = texture2D(otexture, vec2(scalarInterp[0].x * oscale0 + oshift0, 0.5)).r;
+        opacityG1.y = texture2D(otexture, vec2(scalarInterp[0].y * oscale0 + oshift0, 0.5)).r;
+        opacityG1.z = texture2D(otexture, vec2(scalarInterp[0].z * oscale0 + oshift0, 0.5)).r;
+        opacityG2.x = texture2D(otexture, vec2(scalarInterp[1].x * oscale0 + oshift0, 0.5)).r;
+        opacityG2.y = texture2D(otexture, vec2(scalarInterp[1].y * oscale0 + oshift0, 0.5)).r;
+        opacityG2.z = texture2D(otexture, vec2(scalarInterp[1].z * oscale0 + oshift0, 0.5)).r;
+    #ifdef vtkGradientOpacityOn
+        float gradOpacityFactor = 1.0f;
+        if (gradientMag >= 0.0){
+          gradOpacityFactor = computeGradientOpacityFactor(gradientMag, goscale0, goshift0, gomin0, gomax0);
+        }
+        opacityG1.xyz *= gradOpacityFactor;
+        opacityG2.xyz *= gradOpacityFactor;
+    #endif
+
+        vec4 opacityG = vec4(opacityG1 - opacityG2, 1.0f);
+        // divide by spacing
+        opacityG.xyz /= vSpacing;
+        opacityG.w = length(opacityG.xyz);
+        // rotate to View Coords
+        rotateToViewCoord(opacityG.xyz);
+        if (length(opacityG.xyz) > 0.0) {
+          return vec4(normalize(opacityG.xyz),opacityG.w);
+        } else {
+          return vec4(0.0);
+        }
+      }
+
+      vec4 computeNormalForDensity(vec3 pos, vec3 tstep, out vec3 scalarInterp[2])
+      {
+        vec3 xvec = vec3(tstep.x, 0.0, 0.0);
+        vec3 yvec = vec3(0.0, tstep.y, 0.0);
+        vec3 zvec = vec3(0.0, 0.0, tstep.z);
+        vec3 texPosPVec[3];
+        texPosPVec[0] = pos + xvec;
+        texPosPVec[1] = pos + yvec;
+        texPosPVec[2] = pos + zvec;
+        vec3 texPosNVec[3];
+        texPosNVec[0] = pos - xvec;
+        texPosNVec[1] = pos - yvec;
+        texPosNVec[2] = pos - zvec;
+        vec3 g1, g2;
+
+        scalarInterp[0].x = getTextureValue(texPosPVec[0]).a;
+        scalarInterp[0].y = getTextureValue(texPosPVec[1]).a;
+        scalarInterp[0].z = getTextureValue(texPosPVec[2]).a;
+        scalarInterp[1].x = getTextureValue(texPosNVec[0]).a;
+        scalarInterp[1].y = getTextureValue(texPosNVec[1]).a;
+        scalarInterp[1].z = getTextureValue(texPosNVec[2]).a;
+
+        #ifdef vtkClippingPlanesOn
+          adjustClippedVoxelValues(pos, texPosPVec, scalarInterp[0]);
+          adjustClippedVoxelValues(pos, texPosNVec, scalarInterp[1]);
+        #endif
         vec4 result;
-        scalarInterp[0][0] = getTextureValue(pos + vec3(tstep.x, 0.0, 0.0)).a;
-        scalarInterp[0][1] = getTextureValue(pos + vec3(0.0, tstep.y, 0.0)).a;
-        scalarInterp[0][2] = getTextureValue(pos + vec3(0.0, 0.0, tstep.z)).a;
-        // look up scalar values for computing secondary gradient
-        scalarInterp[1][0] = getTextureValue(pos + vec3(2.0*tstep.x, 0.0, 0.0)).a;
-        scalarInterp[1][1] = getTextureValue(pos + vec3(0.0, 2.0*tstep.y, 0.0)).a;
-        scalarInterp[1][2] = getTextureValue(pos + vec3(0.0, 0.0, 2.0*tstep.z)).a;
-        scalarInterp[2][0] = getTextureValue(pos + vec3(tstep.x, tstep.y, 0.0)).a;
-        scalarInterp[2][1] = getTextureValue(pos + vec3(tstep.x, 0.0, tstep.z)).a;
-        scalarInterp[2][2] = getTextureValue(pos + vec3(0.0, tstep.y, tstep.z)).a;
-        result.x = scalarInterp[0][0] - scalar;
-        result.y = scalarInterp[0][1] - scalar;
-        result.z = scalarInterp[0][2] - scalar;
+        result.x = scalarInterp[0].x - scalarInterp[1].x;
+        result.y = scalarInterp[0].y - scalarInterp[1].y;
+        result.z = scalarInterp[0].z - scalarInterp[1].z;
         // divide by spacing
         result.xyz /= vSpacing;
         result.w = length(result.xyz);
+        // rotate to View Coords
         rotateToViewCoord(result.xyz);
-        secondaryGradientMag.x = length(vec3(scalarInterp[1][0] - scalarInterp[0][0],
-                                             scalarInterp[2][0] - scalarInterp[0][0],
-                                             scalarInterp[2][1] - scalarInterp[0][0]) / vSpacing);
-        secondaryGradientMag.y = length(vec3(scalarInterp[2][0] - scalarInterp[0][1],
-                                             scalarInterp[1][1] - scalarInterp[0][1],
-                                             scalarInterp[2][2] - scalarInterp[0][1]) / vSpacing);
-        secondaryGradientMag.z = length(vec3(scalarInterp[2][1] - scalarInterp[0][2],
-                                             scalarInterp[2][2] - scalarInterp[0][2],
-                                             scalarInterp[1][2] - scalarInterp[0][2]) / vSpacing);
         if (length(result.xyz) > 0.0) {
           return vec4(normalize(result.xyz),result.w);
         } else {
           return vec4(0.0);
         }
       }
-
-      vec4 computeDensityNormal(float scalar, float gradientMag, mat3 scalarInterp, vec3 secondaryGradientMag)
-      {
-        vec4 opacityG;
-        vec3 opacityInterp = vec3(0.0);
-        float opacity = texture2D(otexture, vec2(scalar * oscale0 + oshift0, 0.5)).r;
-        if (gradientMag >= 0.0){
-          opacity *= computeGradientOpacityFactor(gradientMag, goscale0, goshift0, gomin0, gomax0);
-        }
-        opacityInterp.x = texture2D(otexture, vec2(scalarInterp[0][0] * oscale0 + oshift0, 0.5)).r; 
-        if (secondaryGradientMag.x >= 0.0){
-          opacityInterp.x *= computeGradientOpacityFactor(secondaryGradientMag.x, goscale0, goshift0, gomin0, gomax0);
-        }
-    
-        opacityInterp.y = texture2D(otexture, vec2(scalarInterp[0][1] * oscale0 + oshift0, 0.5)).r;
-        if (secondaryGradientMag.y >= 0.0){
-          opacityInterp.y *= computeGradientOpacityFactor(secondaryGradientMag.y, goscale0, goshift0, gomin0, gomax0);
-        }
-
-        opacityInterp.z = texture2D(otexture, vec2(scalarInterp[0][2] * oscale0 + oshift0, 0.5)).r;
-        if (secondaryGradientMag.z >= 0.0){
-          opacityInterp.z *= computeGradientOpacityFactor(secondaryGradientMag.z, goscale0, goshift0, gomin0, gomax0);
-        }
-
-        opacityG.xyz = opacityInterp - vec3(opacity,opacity,opacity);
-        // divide by spacing
-        opacityG.xyz /= vSpacing;
-        opacityG.w = length(opacityG.xyz);
-        rotateToViewCoord(opacityG.xyz);
-        if (length(opacityG.xyz) > 0.0) {  
-          return vec4(normalize(opacityG.xyz),opacityG.w);
-        } else {
-          return vec4(0.0);
-        }
-      } 
-
-    #else
-    //if gradient opacity not on but using density gradient
-      vec4 computeDensityNormal(float scalar, vec3 scalarInterp) 
-      { 
-        vec4 opacityG; 
-        float opacity = texture2D(otexture, vec2(scalar * oscale0 + oshift0, 0.5)).r; 
-        opacityG.x = texture2D(otexture, vec2(scalarInterp.x * oscale0 + oshift0, 0.5)).r - opacity; 
-        opacityG.y = texture2D(otexture, vec2(scalarInterp.y * oscale0 + oshift0, 0.5)).r - opacity; 
-        opacityG.z = texture2D(otexture, vec2(scalarInterp.z * oscale0 + oshift0, 0.5)).r - opacity; 
-        // divide by spacing 
-        opacityG.xyz /= vSpacing; 
-        opacityG.w = length(opacityG.xyz); 
-        // rotate to View Coords 
-        rotateToViewCoord(opacityG.xyz);
-        if (length(opacityG.xyz) > 0.0) {     
-          return vec4(normalize(opacityG.xyz),opacityG.w); 
-        } else { 
-          return vec4(0.0); 
-        } 
-      } 
-      vec4 computeNormalForDensity(vec3 pos, float scalar, vec3 tstep, out vec3 scalarInterp) 
-      { 
-        vec4 result; 
-        scalarInterp.x = getTextureValue(pos + vec3(tstep.x, 0.0, 0.0)).a; 
-        scalarInterp.y = getTextureValue(pos + vec3(0.0, tstep.y, 0.0)).a; 
-        scalarInterp.z = getTextureValue(pos + vec3(0.0, 0.0, tstep.z)).a; 
-        result.x = scalarInterp.x - scalar; 
-        result.y = scalarInterp.y - scalar; 
-        result.z = scalarInterp.z - scalar;   
-        // divide by spacing
-        result.xyz /= vSpacing;
-        result.w = length(result.xyz); 
-        // rotate to View Coords 
-        rotateToViewCoord(result.xyz);      
-        if (length(result.xyz) > 0.0) {     
-          return vec4(normalize(result.xyz),result.w); 
-        } else { 
-          return vec4(0.0); 
-        } 
-      }           
-    #endif
   #endif
-  // compute scalar density
-  vec4 computeNormal(vec3 pos, float scalar, vec3 tstep)  
-  {  
-    vec4 result;  
-    result.x = getTextureValue(pos + vec3(tstep.x, 0.0, 0.0)).a - scalar;  
-    result.y = getTextureValue(pos + vec3(0.0, tstep.y, 0.0)).a - scalar;  
-    result.z = getTextureValue(pos + vec3(0.0, 0.0, tstep.z)).a - scalar;  
-    // divide by spacing  
-    result.xyz /= vSpacing;  
-    result.w = length(result.xyz);  
-    // rotate to View Coords  
-    rotateToViewCoord(result.xyz);
-    return vec4(normalize(result.xyz),result.w);  
-  }  
+
+  vec4 computeNormal(vec3 pos, vec3 tstep)
+  {
+    vec3 xvec = vec3(tstep.x, 0.0, 0.0);
+    vec3 yvec = vec3(0.0, tstep.y, 0.0);
+    vec3 zvec = vec3(0.0, 0.0, tstep.z);
+    vec3 texPosPVec[3];
+    texPosPVec[0] = pos + xvec;
+    texPosPVec[1] = pos + yvec;
+    texPosPVec[2] = pos + zvec;
+    vec3 texPosNVec[3];
+    texPosNVec[0] = pos - xvec;
+    texPosNVec[1] = pos - yvec;
+    texPosNVec[2] = pos - zvec;
+    vec3 g1, g2;
+    g1.x = getTextureValue(texPosPVec[0]).a;
+    g1.y = getTextureValue(texPosPVec[1]).a;
+    g1.z = getTextureValue(texPosPVec[2]).a;
+    g2.x = getTextureValue(texPosNVec[0]).a;
+    g2.y = getTextureValue(texPosNVec[1]).a;
+    g2.z = getTextureValue(texPosNVec[2]).a;
+    #ifdef vtkClippingPlanesOn
+      adjustClippedVoxelValues(pos, texPosPVec, g1);
+      adjustClippedVoxelValues(pos, texPosNVec, g2);
+    #endif
+    vec4 result;
+    result = vec4(g1 - g2, -1.0);
+    // divide by spacing
+    result.xyz /= vSpacing;
+    result.w = length(result.xyz);
+    if (result.w > 0.0){
+      // rotate to View Coords
+      rotateToViewCoord(result.xyz);
+      return vec4(normalize(result.xyz),result.w);
+    } else {
+      return vec4(0.0);
+    }
+  }
 #endif
 
 #ifdef vtkImageLabelOutlineOn
@@ -504,7 +521,7 @@ vec3 fragCoordToIndexSpace(vec4 fragCoord) {
 
   vec3 index = (vWCtoIDX * vertex).xyz;
 
-  // half voxel fix for labelmapOutline 
+  // half voxel fix for labelmapOutline
   return (index + vec3(0.5)) / vec3(volumeDimensions);
 }
 #endif
@@ -577,17 +594,9 @@ mat4 computeMat4Normal(vec3 pos, vec4 tValue, vec3 tstep)
 
 //=======================================================================
 // global shadow - secondary ray
-#ifdef VolumeShadowOn
-
-// henyey greenstein phase function
-float phase_function(float cos_angle)
-{
-  // divide by 2.0 instead of 4pi to increase intensity
-  return ((1.0-anisotropy2)/pow(1.0+anisotropy2-2.0*anisotropy*cos_angle, 1.5))/2.0;
-}
-
+#if defined(VolumeShadowOn) || defined(localAmbientOcclusionOn)
 float random()
-{ 
+{
   float rand = fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453123);
   float jitter=texture2D(jtexture,gl_FragCoord.xy/32.).r;
   uint pcg_state = floatBitsToUint(jitter);
@@ -595,6 +604,15 @@ float random()
   pcg_state = pcg_state * uint(747796405) + uint(2891336453);
   uint word = ((state >> ((state >> uint(28)) + uint(4))) ^ state) * uint(277803737);
   return (float((((word >> uint(22)) ^ word) >> 1 ))/float(2147483647) + rand)/2.0;
+}
+#endif
+
+#ifdef VolumeShadowOn
+// henyey greenstein phase function
+float phase_function(float cos_angle)
+{
+  // divide by 2.0 instead of 4pi to increase intensity
+  return ((1.0-anisotropy2)/pow(1.0+anisotropy2-2.0*anisotropy*cos_angle, 1.5))/2.0;
 }
 
 // Computes the intersection between a ray and a box
@@ -640,52 +658,62 @@ float volume_shadow(vec3 posIS, vec3 lightDirNormIS)
   float shadow = 1.0;
   float opacity = 0.0;
 
-  // modify sample distance with a random number between 0.8 and 1.0
-  float sampleDistanceISVS_jitter = sampleDistanceISVS * mix(0.8, 1.0, random());
+  // modify sample distance with a random number between 1.5 and 3.0
+  float sampleDistanceISVS_jitter = sampleDistanceISVS * mix(1.5, 3.0, random());
   float opacityPrev = texture2D(otexture, vec2(getTextureValue(posIS).r * oscale0 + oshift0, 0.5)).r;
-  
-  // in case the first sample near surface has a very tiled light ray, we need to offset start position 
-  posIS += sampleDistanceISVS_jitter * lightDirNormIS;  
+
+  // in case the first sample near surface has a very tiled light ray, we need to offset start position
+  posIS += sampleDistanceISVS_jitter * lightDirNormIS;
 
   // compute the start and end points for the ray
   Ray ray;
-  Hit hit;  
+  Hit hit;
   ray.origin = posIS;
   ray.dir = lightDirNormIS;
   safe_0_vector(ray);
   ray.invDir = 1.0/ray.dir;
-  
+
   if(!BBoxIntersect(vec3(0.0),vec3(1.0), ray, hit))
   {
     return 1.0;
   }
-  vec4 scalar = vec4(0.0);
   float maxdist = hit.tmax;
-  if(maxdist < EPSILON) {
-    return 1.0;
-  }
 
   // interpolate shadow ray length between: 1 unit of sample distance in IS to SQRT3, based on globalIlluminationReach
   float maxgi = mix(sampleDistanceISVS_jitter,SQRT3,giReach);
   maxdist = min(maxdist,maxgi);
+  if(maxdist < EPSILON) {
+    return 1.0;
+  }
 
   // support gradient opacity
   #ifdef vtkGradientOpacityOn
     vec4 normal;
   #endif
 
-  vec3 current_step = sampleDistanceISVS_jitter * lightDirNormIS;
-  float maxSteps = ceil(maxdist/sampleDistanceISVS_jitter);
-  float opacityDelta = 0.0;
+  float current_dist = 0.0;
+  float current_step = length(sampleDistanceISVS_jitter * lightDirNormIS);
+  float clamped_step = 0.0;
 
-  for (float i = 0.0; i < maxSteps; i++)
+  vec4 scalar = vec4(0.0);
+  while(current_dist < maxdist)
   {
+#ifdef vtkClippingPlanesOn
+    vec3 posVC = IStoVC(posIS);
+    for (int i = 0; i < clip_numPlanes; ++i)
+    {
+      if (dot(vec3(vClipPlaneOrigins[i] - posVC), vClipPlaneNormals[i]) > 0.0)
+      {
+        current_dist = maxdist;
+      }
+    }
+#endif
     scalar = getTextureValue(posIS);
     opacity = texture2D(otexture, vec2(scalar.r * oscale0 + oshift0, 0.5)).r;
-    #ifdef vtkGradientOpacityOn 
-      normal = computeNormal(posIS, scalar.a, vec3(1.0/vec3(volumeDimensions))); 
+    #ifdef vtkGradientOpacityOn
+      normal = computeNormal(posIS, vec3(1.0/vec3(volumeDimensions)));
       opacity *= computeGradientOpacityFactor(normal.w, goscale0, goshift0, gomin0, gomax0);
-    #endif    
+    #endif
     shadow *= 1.0 - opacity;
 
     // optimization: early termination
@@ -693,18 +721,12 @@ float volume_shadow(vec3 posIS, vec3 lightDirNormIS)
       return 0.0;
     }
 
-    // optimization: increase/decrease sample distance based on changed in opacity value
-    opacityDelta = opacityPrev - opacity;
-    opacityPrev = opacity;
-    if (opacityDelta > 0.0){
-      current_step *= 0.9;
-    } else if (opacityDelta < 0.0){
-      current_step *= 1.1;
-    }
-    posIS += current_step;
+    clamped_step = min(maxdist - current_dist, current_step);
+    posIS += clamped_step * lightDirNormIS;
+    current_dist += current_step;
   }
 
-  return shadow;  
+  return shadow;
 }
 
 vec3 applyShadowRay(vec3 tColor, vec3 posIS, vec3 viewDirectionVC)
@@ -731,10 +753,74 @@ vec3 applyShadowRay(vec3 tColor, vec3 posIS, vec3 viewDirectionVC)
       phase_attenuation = phase_function(dDotL);
     }
     float vol_shadow = volume_shadow(posIS, normalize(rotateToIDX(vertLight)));
-    secondary_contrib += tColor * vDiffuse * lightColor[i] * vol_shadow * phase_attenuation;     
+    secondary_contrib += tColor * vDiffuse * lightColor[i] * vol_shadow * phase_attenuation;
     secondary_contrib += tColor * vAmbient;
-  } 
+  }
   return secondary_contrib;
+}
+#endif
+
+//=======================================================================
+// local ambient occlusion
+#ifdef localAmbientOcclusionOn
+vec3 sample_direction_uniform(int i)
+{
+  float rand = random() * 0.5;
+  float theta = PI2 * (kernelSample[i][0] + rand);
+  float phi = acos(2.0 * (kernelSample[i][1] + rand) -1.0) / 2.5;
+  return normalize(vec3(cos(theta)*sin(phi), sin(theta)*sin(phi), cos(phi)));
+}
+
+// return a matrix that transform startDir into z axis; startDir should be normalized
+mat3 zBaseRotationalMatrix(vec3 startDir){
+  vec3 axis = cross(startDir, vec3(0.0,0.0,1.0));
+  float cosA = startDir.z;
+  float k = 1.0 / (1.0 + cosA);
+  mat3 matrix = mat3((axis.x * axis.x * k) + cosA, (axis.y * axis.x * k) - axis.z, (axis.z * axis.x * k) + axis.y,
+              (axis.x * axis.y * k) + axis.z, (axis.y * axis.y * k) + cosA, (axis.z * axis.y * k) - axis.x,
+              (axis.x * axis.z * k) - axis.y, (axis.y * axis.z * k) + axis.x, (axis.z * axis.z * k) + cosA);
+  return matrix;
+}
+
+float computeLAO(vec3 posIS, float op, vec3 lightDir, vec4 normal){
+  // apply LAO only at selected locations, otherwise return full brightness
+  if (normal.w > 0.0 && op > 0.05){
+    float total_transmittance = 0.0;
+    mat3 inverseRotateBasis = inverse(zBaseRotationalMatrix(normalize(-normal.xyz)));
+    vec3 currPos, randomDirStep;
+    float weight, transmittance, opacity;
+    for (int i = 0; i < kernelSize; i++)
+    {
+      randomDirStep = inverseRotateBasis * sample_direction_uniform(i) * sampleDistanceIS;
+      weight = 1.0 - dot(normalize(lightDir), normalize(randomDirStep));
+      currPos = posIS;
+      transmittance = 1.0;
+      for (int j = 0; j < kernelRadius ; j++){
+        currPos += randomDirStep;
+        // check if it's at clipping plane, if so return full brightness
+        if (all(greaterThan(currPos, vec3(EPSILON))) && all(lessThan(currPos,vec3(1.0-EPSILON)))){
+          opacity = texture2D(otexture, vec2(getTextureValue(currPos).r * oscale0 + oshift0, 0.5)).r;
+          #ifdef vtkGradientOpacityOn
+             opacity *= computeGradientOpacityFactor(normal.w, goscale0, goshift0, gomin0, gomax0);
+          #endif
+          transmittance *= 1.0 - opacity;
+        }
+        else{
+          break;
+        }
+      }
+      total_transmittance += transmittance / float(kernelRadius) * weight;
+
+      // early termination if fully translucent
+      if (total_transmittance > 1.0 - EPSILON){
+        return 1.0;
+      }
+    }
+    // average transmittance and reduce variance
+    return clamp(total_transmittance / float(kernelSize), 0.3, 1.0);
+  } else {
+    return 1.0;
+  }
 }
 #endif
 
@@ -756,11 +842,14 @@ vec3 applyShadowRay(vec3 tColor, vec3 posIS, vec3 viewDirectionVC)
   }
   #ifdef SurfaceShadowOn
   #if vtkLightComplexity < 3
-    vec3 applyLightingDirectional(inout vec3 tColor, vec4 normal)
+    vec3 applyLightingDirectional(vec3 posIS, vec4 tColor, vec4 normal)
     {
       // everything in VC
       vec3 diffuse = vec3(0.0);
       vec3 specular = vec3(0.0);
+      #ifdef localAmbientOcclusionOn
+        vec3 ambient = vec3(0.0);
+      #endif
       vec3 vertLightDirection;
       for (int i = 0; i < lightNum; i++){
         float ndotL,vdotR;
@@ -780,22 +869,32 @@ vec3 applyShadowRay(vec3 tColor, vec3 posIS, vec3 viewDirectionVC)
             specular += pow(vdotR, vSpecularPower) * lightColor[i];
           }
         }
-      }  
-      return tColor.rgb*(diffuse*vDiffuse + vAmbient) + specular*vSpecular;
+        #ifdef localAmbientOcclusionOn
+            ambient += computeLAO(posIS, tColor.a, vertLightDirection, normal);
+        #endif
+      }
+      #ifdef localAmbientOcclusionOn
+        return tColor.rgb * (diffuse * vDiffuse + vAmbient * ambient) + specular*vSpecular;
+      #else
+        return tColor.rgb * (diffuse * vDiffuse + vAmbient) + specular*vSpecular;
+      #endif
     }
   #else
-    vec3 applyLightingPositional(inout vec3 tColor, vec4 normal, vec3 posVC)
+    vec3 applyLightingPositional(vec3 posIS, vec4 tColor, vec4 normal, vec3 posVC)
     {
       // everything in VC
       vec3 diffuse = vec3(0.0);
       vec3 specular = vec3(0.0);
+      #ifdef localAmbientOcclusionOn
+        vec3 ambient = vec3(0.0);
+      #endif
       vec3 vertLightDirection;
       for (int i = 0; i < lightNum; i++){
         float distance,attenuation,ndotL,vdotR;
         vec3 lightDir;
         if (lightPositional[i] == 1){
           lightDir = lightDirectionVC[i];
-          vertLightDirection = posVC - lightPositionVC[i]; 
+          vertLightDirection = posVC - lightPositionVC[i];
           distance = length(vertLightDirection);
           vertLightDirection = normalize(vertLightDirection);
           attenuation = 1.0 / (lightAttenuation[i].x
@@ -826,6 +925,9 @@ vec3 applyShadowRay(vec3 tColor, vec3 posIS, vec3 viewDirectionVC)
               specular += pow(vdotR, vSpecularPower) * attenuation * lightColor[i];
             }
           }
+          #ifdef localAmbientOcclusionOn
+            ambient += computeLAO(posIS, tColor.a, vertLightDirection, normal);
+          #endif
         } else {
           vertLightDirection = lightDirectionVC[i];
           ndotL = dot(normal.xyz, vertLightDirection);
@@ -843,11 +945,18 @@ vec3 applyShadowRay(vec3 tColor, vec3 posIS, vec3 viewDirectionVC)
               specular += pow(vdotR, vSpecularPower) * lightColor[i];
             }
           }
+          #ifdef localAmbientOcclusionOn
+            ambient += computeLAO(posIS, tColor.a, vertLightDirection, normal);
+          #endif
         }
       }
-      return tColor.rgb * (diffuse * vDiffuse + vAmbient) + specular*vSpecular;
+      #ifdef localAmbientOcclusionOn
+        return tColor.rgb * (diffuse * vDiffuse + vAmbient * ambient) + specular*vSpecular;
+      #else
+        return tColor.rgb * (diffuse * vDiffuse + vAmbient) + specular*vSpecular;
+      #endif
     }
-  #endif 
+  #endif
   #endif
 #endif
 
@@ -898,7 +1007,7 @@ vec4 getColorForValue(vec4 tValue, vec3 posIS, vec3 tstep)
 
     // If I am on the border, I am displayed at full opacity
     if (pixelOnBorder == true) {
-      tColor.a = 1.0;
+      tColor.a = outlineOpacity;
     }
   }
 
@@ -931,27 +1040,21 @@ vec4 getColorForValue(vec4 tValue, vec3 posIS, vec3 tstep)
     #else
       vec4 normalLight;
       #ifdef vtkComputeNormalFromOpacity
-        #ifdef vtkGradientOpacityOn
-          mat3 scalarInterp;  
-          vec3 secondaryGradientMag;  
-          vec4 normal0 = computeNormalForDensity(posIS, tValue.a, tstep, scalarInterp, secondaryGradientMag);  
-          normalLight = computeDensityNormal(tValue.a, normal0.w, scalarInterp,secondaryGradientMag);       
-          if (length(normalLight) == 0.0){  
-            normalLight = normal0;   
-          }                      
-        #else
-          vec3 scalarInterp;  
-          vec4 normal0 = computeNormalForDensity(posIS, tValue.a, tstep, scalarInterp);  
-          if (length(normal0)>0.0){  
-            normalLight = computeDensityNormal(tValue.a,scalarInterp);  
-            if (length(normalLight)==0.0){  
-              normalLight = normal0;  
-            }  
-          }                
-        #endif
-      #else 
-        vec4 normal0 = computeNormal(posIS, tValue.a, tstep);  
-        normalLight = normal0;             
+        vec3 scalarInterp[2];
+        vec4 normal0 = computeNormalForDensity(posIS, tstep, scalarInterp);
+        if (length(normal0)>0.0){
+          #ifdef vtkGradientOpacityOn
+            normalLight = computeDensityNormal(normal0.w, scalarInterp);
+          #else
+            normalLight = computeDensityNormal(scalarInterp);
+          #endif
+          if (length(normalLight) == 0.0){
+            normalLight = normal0;
+          }
+        }
+      #else
+        vec4 normal0 = computeNormal(posIS, tstep);
+        normalLight = normal0;
       #endif
     #endif
   #endif
@@ -988,7 +1091,7 @@ vec4 getColorForValue(vec4 tValue, vec3 posIS, vec3 tstep)
     tColor.a = goFactor.x*texture2D(otexture, vec2(tValue.r * oscale0 + oshift0, 0.5)).r;
     if (tColor.a < EPSILON){
       return vec4(0.0);
-    }    
+    }
   #endif
 
   #if defined(vtkIndependentComponentsOn) && vtkNumComponents >= 2
@@ -1056,41 +1159,48 @@ vec4 getColorForValue(vec4 tValue, vec3 posIS, vec3 tstep)
 
   // apply lighting if requested as appropriate
   #if vtkLightComplexity > 0
-    #if !defined(vtkComponent0Proportional) && defined(SurfaceShadowOn)
-        #if vtkLightComplexity < 3
-            vec3 tColorS = applyLightingDirectional(tColor.rgb, normalLight);
-        #else
-            vec3 tColorS = applyLightingPositional(tColor.rgb, normalLight, IStoVC(posIS));
+    #if !defined(vtkComponent0Proportional)
+      #if vtkNumComponents == 1
+        #ifdef SurfaceShadowOn
+            #if vtkLightComplexity < 3
+                vec3 tColorS = applyLightingDirectional(posIS, tColor, normalLight);
+            #else
+                vec3 tColorS = applyLightingPositional(posIS, tColor, normalLight, IStoVC(posIS));
+            #endif
         #endif
-    #endif
 
-    #ifdef VolumeShadowOn
-      vec3 tColorVS = applyShadowRay(tColor.rgb, posIS, rayDirVC);
-      #ifdef SurfaceShadowOn
-        float vol_coef = volumetricScatteringBlending * (1.0 - tColor.a * exp(normalLight.w));
-        tColor.rgb = (1.0-vol_coef) * tColorS + vol_coef * tColorVS;
+        #ifdef VolumeShadowOn
+          vec3 tColorVS = applyShadowRay(tColor.rgb, posIS, rayDirVC);
+          #ifdef SurfaceShadowOn
+            float vol_coef = volumetricScatteringBlending * (1.0 - tColor.a / 2.0) * (1.0 - atan(normalLight.w) * INV4PI);
+            tColor.rgb = (1.0-vol_coef) * tColorS + vol_coef * tColorVS;
+          #else
+            tColor.rgb = tColorVS;
+          #endif
+        #else
+            tColor.rgb = tColorS;
+        #endif
+
       #else
-        tColor.rgb = tColorVS;
+        applyLighting(tColor.rgb, normal0);
       #endif
-    #else
-        tColor.rgb = tColorS;
     #endif
 
-  #if defined(vtkIndependentComponentsOn) && vtkNumComponents >= 2
-    #if !defined(vtkComponent1Proportional)
-      applyLighting(tColor1, normal1);
+    #if defined(vtkIndependentComponentsOn) && vtkNumComponents >= 2
+      #if !defined(vtkComponent1Proportional)
+        applyLighting(tColor1, normal1);
+      #endif
+    #if vtkNumComponents >= 3
+      #if !defined(vtkComponent2Proportional)
+        applyLighting(tColor2, normal2);
+      #endif
+    #if vtkNumComponents >= 4
+      #if !defined(vtkComponent3Proportional)
+        applyLighting(tColor3, normal3);
+      #endif
     #endif
-  #if vtkNumComponents >= 3
-    #if !defined(vtkComponent2Proportional)
-      applyLighting(tColor2, normal2);
     #endif
-  #if vtkNumComponents >= 4
-    #if !defined(vtkComponent3Proportional)
-      applyLighting(tColor3, normal3);
     #endif
-  #endif
-  #endif
-  #endif
   #endif
 
 // perform final independent blend as needed
@@ -1105,13 +1215,6 @@ vec4 getColorForValue(vec4 tValue, vec3 posIS, vec3 tstep)
 #endif
 
 #endif
-
-
-
-
-
-
-
 return tColor;
 }
 
@@ -1140,7 +1243,7 @@ bool valueWithinScalarRange(vec4 val, vec4 min, vec4 max) {
 //=======================================================================
 // Apply the specified blend mode operation along the ray's path.
 //
-void applyBlend(vec3 posIS, vec3 endIS, float sampleDistanceIS, vec3 tdims)
+void applyBlend(vec3 posIS, vec3 endIS, vec3 tdims)
 {
   vec3 tstep = 1.0/tdims;
 
@@ -1330,6 +1433,38 @@ void applyBlend(vec3 posIS, vec3 endIS, float sampleDistanceIS, vec3 tdims)
 
     gl_FragData[0] = getColorForValue(sum, posIS, tstep);
   #endif
+  #if vtkBlendMode == 5 // RADON
+    float normalizedRayIntensity = 1.0;
+
+    // handle very thin volumes
+    if (raySteps <= 1.0)
+    {
+      tValue = getTextureValue(posIS);
+      normalizedRayIntensity = normalizedRayIntensity - sampleDistance*texture2D(otexture, vec2(tValue.r * oscale0 + oshift0, 0.5)).r;
+      gl_FragData[0] = texture2D(ctexture, vec2(normalizedRayIntensity, 0.5));
+      return;
+    }
+
+    posIS += (jitter*stepIS);
+
+    for (int i = 0; i < //VTK::MaximumSamplesValue ; ++i)
+    {
+      if (stepsTraveled + 1.0 >= raySteps) { break; }
+
+      // compute the scalar value
+      tValue = getTextureValue(posIS);
+
+      // Convert scalar value to normalizedRayIntensity coefficient and accumulate normalizedRayIntensity
+      normalizedRayIntensity = normalizedRayIntensity - sampleDistance*texture2D(otexture, vec2(tValue.r * oscale0 + oshift0, 0.5)).r;
+
+      posIS += stepIS;
+      stepsTraveled++;
+    }
+
+    // map normalizedRayIntensity to color
+    gl_FragData[0] = texture2D(ctexture, vec2(normalizedRayIntensity , 0.5));
+
+  #endif
 }
 
 //=======================================================================
@@ -1424,7 +1559,7 @@ vec2 computeRayDistances(vec3 rayDir, vec3 tdims)
 // Compute the index space starting position (pos) and end
 // position
 //
-void computeIndexSpaceValues(out vec3 pos, out vec3 endPos, out float sampleDistanceIS, vec3 rayDir, vec2 dists)
+void computeIndexSpaceValues(out vec3 pos, out vec3 endPos, vec3 rayDir, vec2 dists)
 {
   // compute starting and ending values in volume space
   pos = vertexVCVSOutput + dists.x*rayDir;
@@ -1481,9 +1616,8 @@ void main()
   // IS = Index Space
   vec3 posIS;
   vec3 endIS;
-  float sampleDistanceIS;
-  computeIndexSpaceValues(posIS, endIS, sampleDistanceIS, rayDirVC, rayStartEndDistancesVC);
+  computeIndexSpaceValues(posIS, endIS, rayDirVC, rayStartEndDistancesVC);
 
   // Perform the blending operation along the ray
-  applyBlend(posIS, endIS, sampleDistanceIS, tdims);
+  applyBlend(posIS, endIS, tdims);
 }

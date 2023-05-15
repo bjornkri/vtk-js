@@ -297,9 +297,7 @@ function vtkOpenGLCellArrayBufferObject(publicAPI, model) {
         );
         newPoints.set(selectionMaps.points);
         selectionMaps.points = newPoints;
-        const newCells = new Int32Array(
-          caboCount + selectionMaps.points.length
-        );
+        const newCells = new Int32Array(caboCount + selectionMaps.cells.length);
         newCells.set(selectionMaps.cells);
         selectionMaps.cells = newCells;
       }
@@ -310,7 +308,7 @@ function vtkOpenGLCellArrayBufferObject(publicAPI, model) {
       // Keep track of original point and cell ids, for selection
       if (selectionMaps) {
         selectionMaps.points[pointCount] = i;
-        selectionMaps.cells[pointCount] = cellCount;
+        selectionMaps.cells[pointCount] = cellCount + options.cellOffset;
       }
       ++pointCount;
 

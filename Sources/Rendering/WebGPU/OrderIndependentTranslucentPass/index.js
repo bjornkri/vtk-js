@@ -50,7 +50,7 @@ function vtkWebGPUOrderIndependentTranslucentPass(publicAPI, model) {
     }
 
     // we just render our delegates in order
-    model.currentParent = viewNode;
+    model._currentParent = viewNode;
 
     const device = viewNode.getDevice();
 
@@ -229,9 +229,7 @@ function vtkWebGPUOrderIndependentTranslucentPass(publicAPI, model) {
       code = vtkWebGPUShaderCache.substitute(
         code,
         '//VTK::RenderEncoder::Impl',
-        [
-          'output.outColor = vec4<f32>(computedColor.rgb*computedColor.a, computedColor.a);',
-        ]
+        ['output.outColor = vec4<f32>(computedColor.rgb, computedColor.a);']
       ).result;
       fDesc.setCode(code);
     });
@@ -241,7 +239,7 @@ function vtkWebGPUOrderIndependentTranslucentPass(publicAPI, model) {
       fragment: {
         targets: [
           {
-            format: 'bgra8unorm',
+            format: 'rgba16float',
             blend: {
               color: {
                 srcFactor: 'src-alpha',

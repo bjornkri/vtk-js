@@ -3,7 +3,7 @@ import vtkRenderer from "../../../Rendering/Core/Renderer";
 import vtkWidgetState from "../WidgetState";
 import { ViewTypes } from "../WidgetManager/Constants";
 import { Bounds, Nullable } from "../../../types";
-import { EventHandler, vtkSubscription } from "../../../interfaces";
+import { EventHandler, vtkSubscription, vtkObject } from "../../../interfaces";
 
 export interface IGetWidgetForViewParams {
   viewId: number;
@@ -12,7 +12,7 @@ export interface IGetWidgetForViewParams {
   initialValues?: object;
 }
 
-export interface vtkAbstractWidgetFactory {
+export interface vtkAbstractWidgetFactory extends vtkObject {
   /**
    * Will return the widget associated with the view with Id id `locator.viewId`. 
    * If there is no widget associated with the view, a new widget will be constructed, provided
@@ -26,6 +26,11 @@ export interface vtkAbstractWidgetFactory {
    * Get a list of all the view ids.
    */
   getViewIds(): string[];
+
+  /**
+   * Get a list of all the instances of the widget.
+   */
+  getViewWidgets(): vtkAbstractWidget[];
 
   /**
    * Set the visiblity on each underlying view widget.

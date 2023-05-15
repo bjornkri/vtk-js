@@ -61,7 +61,10 @@ function createView(gc, viewType, widget) {
   obj.interactor.setInteractorStyle(
     gc.registerResource(vtkInteractorStyleImage.newInstance())
   );
-  obj.widgetInstance = obj.widgetManager.addWidget(widget, viewType);
+  obj.widgetInstance = gc.registerResource(
+    obj.widgetManager.addWidget(widget, viewType, { keepOrthogonality: true })
+  );
+
   obj.widgetManager.enablePicking();
   // Use to update all renderers buffer when actors are moved
   obj.widgetManager.setCaptureOn(CaptureOn.MOUSE_MOVE);
@@ -98,7 +101,6 @@ test('Test rendering when several rotations plane', (t) => {
   // --------------------------------------------------------------------------
 
   const widget = gc.registerResource(vtkResliceCursorWidget.newInstance());
-  widget.getWidgetState().setKeepOrthogonality(true);
   const viewAttributes = [];
 
   /**
@@ -117,11 +119,11 @@ test('Test rendering when several rotations plane', (t) => {
       // computed. If so, then this offset will be used to keep the focal point position during rotation.
     }
   ) {
-    const obj = widget.updateReslicePlane(
+    const modified = widget.updateReslicePlane(
       interactionContext.reslice,
       interactionContext.viewType
     );
-    if (obj.modified) {
+    if (modified) {
       // Get returned modified from setter to know if we have to render
       interactionContext.actor.setUserMatrix(
         interactionContext.reslice.getResliceAxes()
@@ -134,7 +136,7 @@ test('Test rendering when several rotations plane', (t) => {
       interactionContext.keepFocalPointPosition,
       interactionContext.computeFocalPointOffset
     );
-    return obj;
+    return modified;
   }
 
   // --------------------------------------------------------------------------
@@ -231,7 +233,7 @@ test('Test rendering when several rotations plane', (t) => {
        */
       function updateView(viewType) {
         const viewObj = viewAttributes.find((obj) => obj.viewType === viewType);
-        const out = updateReslice({
+        updateReslice({
           viewType,
           reslice: viewObj.reslice,
           actor: viewObj.resliceActor,
@@ -245,9 +247,6 @@ test('Test rendering when several rotations plane', (t) => {
         return {
           focalPoint: camera.getFocalPoint(),
           viewUp: camera.getViewUp(),
-          origin: out.origin,
-          point1: out.point1,
-          point2: out.point2,
         };
       }
 
@@ -269,21 +268,6 @@ test('Test rendering when several rotations plane', (t) => {
           vtkMath.roundVector(comparedValues.viewUp, [], PRECISION),
           vtkMath.roundVector(expectedValues.viewUp, [], PRECISION),
           `Camera view up on ${viewType}`
-        );
-        t.deepEqual(
-          vtkMath.roundVector(comparedValues.origin, [], PRECISION),
-          vtkMath.roundVector(expectedValues.origin, [], PRECISION),
-          `Plane origin on ${viewType}`
-        );
-        t.deepEqual(
-          vtkMath.roundVector(comparedValues.point1, [], PRECISION),
-          vtkMath.roundVector(expectedValues.point1, [], PRECISION),
-          `Plane point 1 on ${viewType}`
-        );
-        t.deepEqual(
-          vtkMath.roundVector(comparedValues.point2, [], PRECISION),
-          vtkMath.roundVector(expectedValues.point2, [], PRECISION),
-          `Plane point 2 on ${viewType}`
         );
         return comparedValues;
       }
@@ -320,7 +304,7 @@ test('Test rendering when several rotations plane', (t) => {
       t.comment('Rotate Z by 45 degrees around Y');
       const xzWidget = viewAttributes[viewTypeToXYZ[ViewTypes.XZ_PLANE]];
       xzWidget.widgetInstance.rotateLineInView(
-        widget.getWidgetState().getAxisXinY(),
+        'XinY',
         vtkMath.radiansFromDegrees(45)
       );
       // Check X view
@@ -353,7 +337,7 @@ test('Test rendering when several rotations plane', (t) => {
       // Simulate increment of 5, seven times to have 35°
       for (let i = 0; i < 7; i++) {
         xzWidget.widgetInstance.rotateLineInView(
-          widget.getWidgetState().getAxisYinZ(),
+          'YinZ',
           vtkMath.radiansFromDegrees(5)
         );
         updateViews(true);
@@ -368,7 +352,7 @@ test('Test rendering when several rotations plane', (t) => {
       // ----------------------------------------------------------------------
       t.comment('Rotate Z by -35 degrees around Y');
       xzWidget.widgetInstance.rotateLineInView(
-        widget.getWidgetState().getAxisYinZ(),
+        'YinZ',
         vtkMath.radiansFromDegrees(-35)
       );
 
