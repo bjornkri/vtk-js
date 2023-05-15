@@ -177,7 +177,7 @@ export function extend(publicAPI, model, initialValues = {}) {
   Object.assign(model, DEFAULT_VALUES, initialValues);
 
   vtkContextRepresentation.extend(publicAPI, model, initialValues);
-  macro.get(publicAPI, model, ['mapper']);
+  macro.get(publicAPI, model, ['mapper', 'pipelines']);
   macro.setGet(publicAPI, model, [
     'resolution',
     'boundaryCondition',
