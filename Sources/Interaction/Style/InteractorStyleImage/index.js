@@ -89,6 +89,18 @@ function vtkInteractorStyleImage(publicAPI, model) {
     }
   };
 
+
+  //--------------------------------------------------------------------------
+  // Enable zooming 
+  publicAPI.handleRightButtonPress = () => {
+    publicAPI.startDolly();
+  }
+
+  publicAPI.handleRightButtonRelease = () => {
+    publicAPI.endDolly();
+  }
+
+  
   //--------------------------------------------------------------------------
   publicAPI.handleStartMouseWheel = () => {
     publicAPI.startSlice();
